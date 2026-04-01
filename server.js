@@ -146,22 +146,215 @@ function getProcessTTY(pid) {
   return null;
 }
 
-// Inject characters into a TTY's input queue using TIOCSTI.
-// Writing to the slave device only affects display output; TIOCSTI is the
-// correct mechanism to send characters to the process reading from that TTY.
-function injectInputToTTY(ttyPath, text) {
-  const script = [
-    'import sys, fcntl',
-    'try:',
-    '    from termios import TIOCSTI',
-    'except (ImportError, AttributeError):',
-    '    TIOCSTI = 0x80017472  # macOS Darwin fallback',
-    'fd = open(sys.argv[1], "r")',
-    'for c in sys.argv[2]:',
-    '    fcntl.ioctl(fd.fileno(), TIOCSTI, c.encode("latin-1"))',
-    'fd.close()'
-  ].join('\n');
-  execFileSync('python3', ['-c', script, ttyPath, text], { timeout: 4000 });
+// ─── Risk Assessment ─────────────────────────────────────────────────────────
+
+function assessRisk(toolName, input) {
+  // Returns { level: 'low'|'medium'|'high'|'critical', plain, reason }
+  if (!input) return { level: 'low', plain: `Run ${toolName}`, reason: 'No input provided.' };
+
+  if (toolName === 'Bash') {
+    const cmd = (input.command || '').trim();
+    const c = cmd.toLowerCase();
+
+    // Critical: irreversible destructive or privilege escalation
+    const critical = [
+      [/rm\s+-[a-z]*r[a-z]*f|rm\s+-[a-z]*f[a-z]*r/, 'Recursively force-delete files — permanently removes entire directories'],
+      [/sudo\s+rm/, 'Delete files with root privileges — can remove system files'],
+      [/curl[^|]+\|\s*(ba?sh|sh|zsh|python|ruby|perl|node)/, 'Download and execute a remote script — arbitrary code from the internet'],
+      [/wget[^|]+\|\s*(ba?sh|sh|zsh|python|ruby|perl|node)/, 'Download and execute a remote script — arbitrary code from the internet'],
+      [/mkfs|fdisk|diskutil\s+erase/, 'Format or erase a disk partition'],
+      [/dd\s+if=/, 'Write raw data directly to a device'],
+      [/:\s*\(\s*\)\s*\{.*:\s*\|.*&/, 'Fork bomb — will crash the system'],
+      [/shred\s+/, 'Securely destroy files, making them unrecoverable'],
+      [/sudo\s+chmod\s+777\s+\//, 'Open write permissions on root filesystem'],
+    ];
+    for (const [re, plain] of critical) {
+      if (re.test(cmd)) return { level: 'critical', plain, reason: `Command: ${cmd.substring(0, 120)}` };
+    }
+
+    // High: data loss, network exfiltration, system changes
+    const high = [
+      [/rm\s+/, 'Delete one or more files'],
+      [/git\s+push\s+.*--force|git\s+push\s+-f/, 'Force-push to git remote — rewrites history'],
+      [/git\s+reset\s+--hard/, 'Hard-reset git branch — discards all uncommitted changes'],
+      [/git\s+clean\s+-[a-z]*f/, 'Remove untracked files from the working tree'],
+      [/pkill|killall/, 'Terminate one or more running processes by name'],
+      [/sudo\s+/, 'Run a command with root (administrator) privileges'],
+      [/chmod\s+[0-7]*7[0-7]{2}|chmod\s+a\+w/, 'Make file(s) world-writable'],
+      [/chown\s+/, 'Change file ownership'],
+      [/>\s*~\/|>\s*\/[a-z]/, 'Overwrite a file outside the project directory'],
+      [/launchctl|systemctl|service\s+/, 'Start, stop, or modify a system service'],
+      [/crontab\s+-[re]/, 'Edit or remove scheduled cron jobs'],
+      [/export\s+.*KEY|export\s+.*SECRET|export\s+.*TOKEN|export\s+.*PASSWORD/, 'Set environment variable containing a credential'],
+    ];
+    for (const [re, plain] of high) {
+      if (re.test(cmd)) return { level: 'high', plain, reason: `Command: ${cmd.substring(0, 120)}` };
+    }
+
+    // Medium: network, installs, git writes
+    const medium = [
+      [/curl\s+|wget\s+/, 'Make a network request to an external URL'],
+      [/npm\s+(install|ci|publish)|yarn\s+(install|add|publish)|pip\s+install|brew\s+install/, 'Install or publish a software package'],
+      [/git\s+(commit|push|pull|merge|rebase|cherry-pick)/, 'Perform a git write operation'],
+      [/mv\s+/, 'Move or rename file(s)'],
+      [/cp\s+-[a-z]*r/, 'Copy directory recursively'],
+      [/open\s+/, 'Open an application or file'],
+      [/npx\s+|bunx\s+/, 'Execute a remote npm package'],
+      [/ssh\s+|scp\s+/, 'Connect to or transfer files with a remote host'],
+      [/osascript/, 'Run an AppleScript — can control applications'],
+    ];
+    for (const [re, plain] of medium) {
+      if (re.test(cmd)) return { level: 'medium', plain, reason: `Command: ${cmd.substring(0, 120)}` };
+    }
+
+    return { level: 'low', plain: `Run terminal command: ${cmd.substring(0, 80)}`, reason: 'Read-only or low-impact shell command.' };
+  }
+
+  if (toolName === 'Write') {
+    const fp = input.file_path || '';
+    const isOutsideProject = /^\/(?!Users\/[^/]+\/[^/]+)/.test(fp) || fp.startsWith('/etc') || fp.startsWith('/usr') || fp.startsWith('/System');
+    if (isOutsideProject) return { level: 'high', plain: `Write to system path: ${fp}`, reason: 'Writing outside the home directory.' };
+    return { level: 'medium', plain: `Create or overwrite file: ${fp}`, reason: 'Will replace existing file contents if it exists.' };
+  }
+
+  if (toolName === 'Edit' || toolName === 'MultiEdit') {
+    return { level: 'low', plain: `Edit file: ${input.file_path || ''}`, reason: 'Modifies specific lines; original content preserved in git.' };
+  }
+
+  if (toolName === 'Read') {
+    return { level: 'low', plain: `Read file: ${input.file_path || ''}`, reason: 'Read-only operation.' };
+  }
+
+  if (toolName === 'Glob' || toolName === 'Grep') {
+    return { level: 'low', plain: `Search files matching: ${input.pattern || input.glob || ''}`, reason: 'Read-only search.' };
+  }
+
+  if (toolName === 'Agent') {
+    return { level: 'medium', plain: `Launch sub-agent: ${(input.description || input.prompt || '').substring(0, 80)}`, reason: 'Spawns an autonomous sub-agent that may take further actions.' };
+  }
+
+  if (toolName === 'WebFetch' || toolName === 'WebSearch') {
+    return { level: 'low', plain: `Fetch URL: ${input.url || input.query || ''}`, reason: 'Network read; no local changes.' };
+  }
+
+  if (toolName === 'TodoWrite') {
+    return { level: 'low', plain: `Update task list (${(input.todos || []).length} items)`, reason: 'Updates in-memory task list only.' };
+  }
+
+  return { level: 'low', plain: `Use tool: ${toolName}`, reason: 'Unknown tool — review manually.' };
+}
+
+// ─── macOS Notification ───────────────────────────────────────────────────────
+
+const _notifiedApprovals = new Set(); // track toolUseIds already notified
+
+function fireApprovalNotification(projectName, sessionId, approvals) {
+  if (!approvals || approvals.length === 0) return;
+  const newApprovals = approvals.filter(a => !_notifiedApprovals.has(a.toolUseId));
+  if (newApprovals.length === 0) return;
+  newApprovals.forEach(a => _notifiedApprovals.add(a.toolUseId));
+
+  const a = newApprovals[0];
+  const risk = assessRisk(a.toolName, a.input);
+  const riskEmoji = { low: '🟢', medium: '🟡', high: '🔴', critical: '⛔' }[risk.level] || '⚪';
+  const subtitle = `${a.toolName} · ${risk.level.toUpperCase()} risk · ${projectName}`;
+  const body = risk.plain.replace(/'/g, '').substring(0, 100);
+  const extra = newApprovals.length > 1 ? ` (+${newApprovals.length - 1} more)` : '';
+
+  const script = `display notification "${body}${extra}" with title "${riskEmoji} Conductor: Approval Needed" subtitle "${subtitle}" sound name "Basso"`;
+  exec(`osascript -e '${script}'`, () => {});
+}
+
+// ─── Multi-method Approval Sending ───────────────────────────────────────────
+
+function getPidAncestors(pid) {
+  const chain = new Set();
+  let current = pid;
+  for (let i = 0; i < 12; i++) {
+    try {
+      const ppid = parseInt(execSync(`ps -o ppid= -p ${current}`, { encoding: 'utf8' }).trim());
+      if (!ppid || ppid <= 1) break;
+      chain.add(ppid);
+      current = ppid;
+    } catch { break; }
+  }
+  return chain;
+}
+
+function sendApprovalToProcess(pid, tty, response) {
+  const key = response.trim() === 'y' ? 'y' : 'n';
+  return sendTextToProcess(pid, tty, key);
+}
+
+function sendTextToProcess(pid, tty, text) {
+
+  // 1. Try tmux: check if any pane's PID is an ancestor-or-self of our process
+  try {
+    const lines = execSync('tmux list-panes -a -F "#{pane_pid} #{session_name}:#{window_index}.#{pane_index}" 2>/dev/null', { encoding: 'utf8', timeout: 2000 }).trim().split('\n');
+    const ancestors = getPidAncestors(pid);
+    ancestors.add(pid);
+    for (const line of lines) {
+      const parts = line.trim().split(' ');
+      if (parts.length < 2) continue;
+      const panePid = parseInt(parts[0]);
+      const target = parts[1];
+      if (ancestors.has(panePid)) {
+        execSync(`tmux send-keys -t "${target}" "${text}" Enter`, { timeout: 3000 });
+        return { method: 'tmux', target };
+      }
+    }
+  } catch {}
+
+  if (!tty) {
+    throw new Error('No TTY found. This session was likely started by Claude Desktop — approve directly in the Claude app.');
+  }
+
+  const ttyName = tty.replace('/dev/', '');
+
+  // 2. Try iTerm2 (write text goes directly to the session's stdin)
+  try {
+    const itermScript = `
+tell application "iTerm2"
+  repeat with w in windows
+    repeat with t in tabs of w
+      repeat with s in sessions of t
+        if (tty of s) contains "${ttyName}" then
+          write text "${text}" to s
+          return "ok"
+        end if
+      end repeat
+    end repeat
+  end repeat
+end tell
+return "notfound"`.trim();
+    const result = execSync(`osascript << 'APPLESCRIPT'\n${itermScript}\nAPPLESCRIPT`, { encoding: 'utf8', timeout: 5000 }).trim();
+    if (result === 'ok') return { method: 'iterm2' };
+  } catch {}
+
+  // 3. Try Terminal.app (requires Accessibility permission — bring tab to front, send keystroke)
+  try {
+    const termScript = `
+tell application "Terminal"
+  repeat with w in windows
+    repeat with t in tabs of w
+      if (tty of t) is equal to "${tty}" then
+        set frontmost of w to true
+        set selected tab of w to t
+        tell application "System Events" to tell process "Terminal"
+          keystroke "${text}"
+          key code 36
+        end tell
+        return "ok"
+      end if
+    end repeat
+  end repeat
+end tell
+return "notfound"`.trim();
+    const result = execSync(`osascript << 'APPLESCRIPT'\n${termScript}\nAPPLESCRIPT`, { encoding: 'utf8', timeout: 5000 }).trim();
+    if (result === 'ok') return { method: 'terminal' };
+  } catch {}
+
+  throw new Error('Could not deliver response. For reliable remote approve/deny, run Claude Code inside tmux.');
 }
 
 function isClaudeProcess(pid) {
@@ -632,12 +825,28 @@ app.get('/api/sessions/:sessionId/pending-approvals', (req, res) => {
   try {
     const sessionId = req.params.sessionId;
     const jsonlPath = findJsonlPath(sessionId);
-    if (!jsonlPath) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-
+    if (!jsonlPath) return res.status(404).json({ error: 'Session not found' });
     const records = readLastNLines(jsonlPath, 30);
-    const approvals = findPendingApprovals(records);
+    const approvals = findPendingApprovals(records).map(a => ({ ...a, risk: assessRisk(a.toolName, a.input) }));
+    res.json({ approvals });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/sessions/:sessionId/risk — risk assessment for all pending approvals
+app.get('/api/sessions/:sessionId/risk', (req, res) => {
+  try {
+    const sessionId = req.params.sessionId;
+    const jsonlPath = findJsonlPath(sessionId);
+    if (!jsonlPath) return res.status(404).json({ error: 'Session not found' });
+    const records = readLastNLines(jsonlPath, 30);
+    const approvals = findPendingApprovals(records).map(a => ({
+      toolUseId: a.toolUseId,
+      toolName: a.toolName,
+      input: a.input,
+      risk: assessRisk(a.toolName, a.input)
+    }));
     res.json({ approvals });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -649,31 +858,16 @@ app.post('/api/sessions/:sessionId/approve', (req, res) => {
   try {
     const sessionId = req.params.sessionId;
     const meta = getSessionMeta(sessionId);
-
-    if (!meta?.pid) {
-      return res.status(400).json({ error: 'No PID for session' });
-    }
-
-    if (!isProcessRunning(meta.pid)) {
-      return res.status(400).json({ error: 'Process is not running' });
-    }
-
-    if (!isClaudeProcess(meta.pid)) {
-      return res.status(400).json({ error: 'PID does not belong to a Claude process' });
-    }
+    if (!meta?.pid) return res.status(400).json({ error: 'No PID for session' });
+    if (!isProcessRunning(meta.pid)) return res.status(400).json({ error: 'Process is not running' });
 
     const tty = getProcessTTY(meta.pid);
-    if (!tty) {
-      return res.status(400).json({ error: 'This session was launched by Claude Desktop — approve the permission directly in the Claude app window.' });
-    }
-
-    // Inject approval into TTY input queue via TIOCSTI
     try {
-      injectInputToTTY(tty, 'y\n');
+      const result = sendApprovalToProcess(meta.pid, tty, 'y');
       broadcast({ type: 'approval:resolved', sessionId, action: 'approved' });
-      res.json({ success: true, message: 'Approval sent', tty });
-    } catch (writeErr) {
-      res.status(500).json({ error: `Failed to inject into TTY: ${writeErr.message}` });
+      res.json({ success: true, method: result.method });
+    } catch (sendErr) {
+      res.status(500).json({ error: sendErr.message });
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -685,26 +879,16 @@ app.post('/api/sessions/:sessionId/deny', (req, res) => {
   try {
     const sessionId = req.params.sessionId;
     const meta = getSessionMeta(sessionId);
-
-    if (!meta?.pid) {
-      return res.status(400).json({ error: 'No PID for session' });
-    }
-
-    if (!isProcessRunning(meta.pid)) {
-      return res.status(400).json({ error: 'Process is not running' });
-    }
+    if (!meta?.pid) return res.status(400).json({ error: 'No PID for session' });
+    if (!isProcessRunning(meta.pid)) return res.status(400).json({ error: 'Process is not running' });
 
     const tty = getProcessTTY(meta.pid);
-    if (!tty) {
-      return res.status(400).json({ error: 'This session was launched by Claude Desktop — deny the permission directly in the Claude app window.' });
-    }
-
     try {
-      injectInputToTTY(tty, 'n\n');
+      const result = sendApprovalToProcess(meta.pid, tty, 'n');
       broadcast({ type: 'approval:resolved', sessionId, action: 'denied' });
-      res.json({ success: true, message: 'Denial sent', tty });
-    } catch (writeErr) {
-      res.status(500).json({ error: `Failed to inject into TTY: ${writeErr.message}` });
+      res.json({ success: true, method: result.method });
+    } catch (sendErr) {
+      res.status(500).json({ error: sendErr.message });
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -728,9 +912,9 @@ app.post('/api/sessions/:sessionId/inject', (req, res) => {
     if (!tty) return res.status(400).json({ error: 'Could not find TTY' });
 
     try {
-      injectInputToTTY(tty, prompt + '\n');
+      const result = sendTextToProcess(meta.pid, tty, prompt);
       broadcast({ type: 'session:injected', sessionId, prompt: prompt.substring(0, 100) });
-      res.json({ success: true, message: 'Prompt injected' });
+      res.json({ success: true, message: 'Prompt injected', method: result.method });
     } catch (writeErr) {
       res.status(500).json({ error: `Failed to inject: ${writeErr.message}` });
     }
@@ -1480,7 +1664,7 @@ wss.on('connection', (ws) => {
 
 // ─── File Watchers ───────────────────────────────────────────────────────────
 
-let debounceTimer = null;
+const debounceTimers = new Map(); // per-file debounce timers
 
 function setupWatchers() {
   // Watch session metadata files
@@ -1511,8 +1695,8 @@ function setupWatchers() {
       usePolling: false,
       awaitWriteFinish: { stabilityThreshold: 200 }
     }).on('change', (filePath) => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
+      clearTimeout(debounceTimers.get(filePath));
+      debounceTimers.set(filePath, setTimeout(() => {
         const sessionId = path.basename(filePath, '.jsonl');
         const newRecords = readNewLines(filePath);
 
@@ -1520,10 +1704,16 @@ function setupWatchers() {
           // Check for new pending approvals
           const approvals = findPendingApprovals(newRecords);
           if (approvals.length > 0) {
+            // Attach risk assessment to each approval
+            const approvalsWithRisk = approvals.map(a => ({ ...a, risk: assessRisk(a.toolName, a.input) }));
+            // Derive project name for notification
+            const projectDirName = path.basename(path.dirname(filePath));
+            const projectName = projectPathToName(projectDirName);
+            fireApprovalNotification(projectName, sessionId, approvals);
             broadcast({
               type: 'approval:pending',
               sessionId,
-              approvals
+              approvals: approvalsWithRisk
             });
           }
 
@@ -1533,7 +1723,8 @@ function setupWatchers() {
             newMessages: formatMessages(newRecords)
           });
         }
-      }, 100);
+        debounceTimers.delete(filePath);
+      }, 100));
     }).on('add', (filePath) => {
       const sessionId = path.basename(filePath, '.jsonl');
       broadcast({ type: 'session:new', sessionId });

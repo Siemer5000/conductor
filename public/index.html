@@ -140,6 +140,22 @@ html, body {
 .btn-approve:hover { opacity: 0.85; }
 .btn-deny { background: transparent; border-color: var(--red); color: var(--red); }
 .btn-deny:hover { background: var(--red-bg); }
+
+/* ─── Risk badges ───────────────────────────────────────────────────────── */
+.risk-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.risk-badge.low    { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green); }
+.risk-badge.medium { background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow); }
+.risk-badge.high   { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red); }
+.risk-badge.critical { background: var(--red); color: #fff; border: 1px solid var(--red); animation: pulse 1.2s infinite; }
+
+/* ─── Approval banner (top of main panel) ───────────────────────────────── */
+.approval-banner { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; background: rgba(210,153,34,0.12); border: 1px solid var(--yellow); border-radius: var(--radius); margin-bottom: 14px; }
+.approval-banner-icon { font-size: 22px; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+.approval-banner-body { flex: 1; min-width: 0; }
+.approval-banner-title { font-weight: 700; color: var(--yellow); font-size: 13px; margin-bottom: 3px; }
+.approval-banner-plain { font-size: 12px; color: var(--text-primary); margin-bottom: 6px; word-break: break-word; }
+.approval-banner-reason { font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); word-break: break-word; }
+.approval-banner-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
 .btn-danger:hover { background: var(--red-bg); }
 .btn-warning { background: transparent; border-color: var(--yellow); color: var(--yellow); }
@@ -476,6 +492,7 @@ class Dashboard {
     this.viewMode = localStorage.getItem('dashboardViewMode') || 'grid';
     this.theme = localStorage.getItem('conductorTheme') || 'dark';
     this._notifiedSessions = new Set();
+    this._pendingApprovals = {}; // sessionId -> approvals[]
   }
 
   async init() {
@@ -516,12 +533,15 @@ class Dashboard {
         if (data.type === 'session:new') this.showToast('New session detected', 'info');
         break;
       case 'approval:pending':
-        this.showToast(`Approval needed: ${data.approvals?.map(a => a.toolName).join(', ')}`, 'info');
+        this._pendingApprovals[data.sessionId] = data.approvals || [];
+        this.showApprovalBanner(data.sessionId, data.approvals);
         if (this.selectedSession === data.sessionId) this.loadSessionDetail(data.sessionId);
         this.loadProjects();
         break;
       case 'approval:resolved':
-        this.showToast(`Approval ${data.action}`, 'success');
+        delete this._pendingApprovals[data.sessionId];
+        this.hideApprovalBanner(data.sessionId);
+        this.showToast(`Tool ${data.action}`, 'success');
         if (this.selectedSession === data.sessionId) this.loadSessionDetail(data.sessionId);
         break;
       case 'session:injected': this.showToast('Prompt injected', 'success'); break;
@@ -600,14 +620,26 @@ class Dashboard {
   // ─── Agent Control ──────────────────────────────────────────────────────
   async sendApproval(sessionId) {
     const data = await this.postJSON(`/api/sessions/${sessionId}/approve`);
-    if (data.success) { this.showToast('Approved', 'success'); setTimeout(() => this.loadSessionDetail(sessionId), 1000); }
-    else this.showToast(data.error, 'error');
+    if (data.success) {
+      const via = data.method ? ` via ${data.method}` : '';
+      this.showToast(`✓ Approved${via}`, 'success');
+      this.hideApprovalBanner(sessionId);
+      setTimeout(() => this.loadSessionDetail(sessionId), 800);
+    } else {
+      this.showToast(data.error || 'Approval failed', 'error');
+    }
   }
 
   async sendDenial(sessionId) {
     const data = await this.postJSON(`/api/sessions/${sessionId}/deny`);
-    if (data.success) { this.showToast('Denied', 'success'); setTimeout(() => this.loadSessionDetail(sessionId), 1000); }
-    else this.showToast(data.error, 'error');
+    if (data.success) {
+      const via = data.method ? ` via ${data.method}` : '';
+      this.showToast(`✗ Denied${via}`, 'info');
+      this.hideApprovalBanner(sessionId);
+      setTimeout(() => this.loadSessionDetail(sessionId), 800);
+    } else {
+      this.showToast(data.error || 'Denial failed', 'error');
+    }
   }
 
   async pauseAgent(sessionId) {
@@ -723,6 +755,51 @@ class Dashboard {
       // Remove from notified set once no longer waiting (so it notifies again if it waits again)
       if (s.status !== 'waiting_for_approval') this._notifiedSessions.delete(s.sessionId);
     });
+  }
+
+  // ─── Approval Banner ────────────────────────────────────────────────────
+
+  riskBadge(level) {
+    const labels = { low: '🟢 Low', medium: '🟡 Medium', high: '🔴 High', critical: '⛔ Critical' };
+    return `<span class="risk-badge ${level}">${labels[level] || level}</span>`;
+  }
+
+  showApprovalBanner(sessionId, approvals) {
+    if (!approvals || approvals.length === 0) return;
+    // Only show banner if this session is currently selected
+    const panel = document.getElementById('mainPanel');
+    if (!panel || this.selectedSession !== sessionId) return;
+    this._renderApprovalBanner(panel, sessionId, approvals);
+  }
+
+  _renderApprovalBanner(panel, sessionId, approvals) {
+    document.querySelectorAll('.approval-banner-wrap').forEach(e => e.remove());
+    const wrap = document.createElement('div');
+    wrap.className = 'approval-banner-wrap';
+    wrap.style.cssText = 'position:sticky;top:0;z-index:20;padding:14px 18px 0;';
+    wrap.innerHTML = approvals.map((a, i) => {
+      const risk = a.risk || { level: 'medium', plain: a.toolName, reason: '' };
+      const cmd = this.escapeHtml((a.input?.command || a.input?.file_path || a.input?.description || JSON.stringify(a.input || {})).substring(0, 200));
+      return `<div class="approval-banner">
+        <div class="approval-banner-icon">⚠️</div>
+        <div class="approval-banner-body">
+          <div class="approval-banner-title">
+            Approval needed — ${this.escapeHtml(a.toolName)} &nbsp; ${this.riskBadge(risk.level)}
+          </div>
+          <div class="approval-banner-plain">${this.escapeHtml(risk.plain)}</div>
+          ${risk.reason ? `<div class="approval-banner-reason">${this.escapeHtml(risk.reason)}</div>` : ''}
+          <div class="approval-banner-actions">
+            <button class="btn btn-approve btn-sm" onclick="app.sendApproval('${sessionId}')">✓ Approve</button>
+            <button class="btn btn-deny btn-sm" onclick="app.sendDenial('${sessionId}')">✗ Deny</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    panel.prepend(wrap);
+  }
+
+  hideApprovalBanner(sessionId) {
+    document.querySelectorAll('.approval-banner-wrap').forEach(e => e.remove());
   }
 
   // ─── Tab Switching ──────────────────────────────────────────────────────
@@ -1095,16 +1172,27 @@ class Dashboard {
     // Build approvals
     let approvalsHtml = '';
     if (data.pendingApprovals?.length) {
+      // Render approval banner into main panel after load
+      setTimeout(() => this._renderApprovalBanner(document.getElementById('mainPanel'), data.sessionId, data.pendingApprovals), 0);
       approvalsHtml = `<div class="approval-section">
-        <div class="approval-section-title">Pending Approvals (${data.pendingApprovals.length})</div>
-        ${data.pendingApprovals.map(a => `<div class="approval-card">
-          <div class="approval-tool-name">${this.escapeHtml(a.toolName)}</div>
-          <div class="approval-input">${this.escapeHtml(this.formatApprovalInput(a.toolName, a.input))}</div>
-          <div class="approval-actions">
-            <button class="btn btn-approve" onclick="app.sendApproval('${data.sessionId}')">Approve</button>
-            <button class="btn btn-deny" onclick="app.sendDenial('${data.sessionId}')">Deny</button>
-          </div>
-        </div>`).join('')}
+        <div class="approval-section-title">⏳ Waiting for Approval (${data.pendingApprovals.length})</div>
+        ${data.pendingApprovals.map(a => {
+          const risk = a.risk || { level: 'medium', plain: a.toolName, reason: '' };
+          const inputSummary = this.formatApprovalInput(a.toolName, a.input);
+          return `<div class="approval-card">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <div class="approval-tool-name" style="margin:0;">${this.escapeHtml(a.toolName)}</div>
+              ${this.riskBadge(risk.level)}
+            </div>
+            <div class="approval-plain" style="font-size:12px;color:var(--text-primary);margin-bottom:4px;font-weight:500;">${this.escapeHtml(risk.plain)}</div>
+            ${risk.reason ? `<div class="approval-input" style="margin-bottom:8px;">${this.escapeHtml(risk.reason)}</div>` : ''}
+            ${inputSummary ? `<div class="approval-input">${this.escapeHtml(inputSummary)}</div>` : ''}
+            <div class="approval-actions">
+              <button class="btn btn-approve" onclick="app.sendApproval('${data.sessionId}')">✓ Approve</button>
+              <button class="btn btn-deny" onclick="app.sendDenial('${data.sessionId}')">✗ Deny</button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>`;
     }
 
@@ -1298,14 +1386,24 @@ class Dashboard {
         </div>
         ${isList ? '' : `<div style="display:flex;align-items:center;justify-content:space-between;"><div class="overview-card-slug">${this.escapeHtml(s.slug || s.sessionId.substring(0, 8))}</div><span class="status-badge ${s.status}">${this.formatStatus(s.status)}</span></div>`}
         <div class="overview-card-summary">${this.escapeHtml(s.summary || '')}</div>
-        ${s.pendingApprovals.length ? `
-          <div class="${isList ? 'approval-inline' : ''}" style="margin-top:8px;padding:8px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:var(--radius-sm);" onclick="event.stopPropagation()">
-            <div style="font-size:11px;color:var(--yellow);margin-bottom:6px;font-weight:600;">⏳ Waiting: ${s.pendingApprovals.map(a => this.escapeHtml(a.toolName)).join(', ')}</div>
-            <div style="display:flex;gap:6px;">
-              <button class="btn btn-approve" style="font-size:11px;padding:3px 10px;" onclick="event.stopPropagation();app.sendApproval('${s.sessionId}')">Approve</button>
-              <button class="btn btn-deny" style="font-size:11px;padding:3px 10px;" onclick="event.stopPropagation();app.sendDenial('${s.sessionId}')">Deny</button>
-            </div>
-          </div>` : ''}
+        ${s.pendingApprovals.length ? s.pendingApprovals.map(a => {
+            const risk = a.risk || { level: 'medium', plain: a.toolName, reason: '' };
+            const riskColors = { low: 'var(--green)', medium: 'var(--yellow)', high: 'var(--red)', critical: 'var(--red)' };
+            const riskBg = { low: 'var(--green-bg)', medium: 'var(--yellow-bg)', high: 'var(--red-bg)', critical: 'var(--red-bg)' };
+            const col = riskColors[risk.level] || 'var(--yellow)';
+            const bg = riskBg[risk.level] || 'var(--yellow-bg)';
+            return `<div class="${isList ? 'approval-inline' : ''}" style="margin-top:8px;padding:8px;background:${bg};border:1px solid ${col};border-radius:var(--radius-sm);" onclick="event.stopPropagation()">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                <span style="font-size:11px;color:${col};font-weight:700;">⏳ ${this.escapeHtml(a.toolName)}</span>
+                ${this.riskBadge(risk.level)}
+              </div>
+              <div style="font-size:11px;color:var(--text-primary);margin-bottom:6px;">${this.escapeHtml(risk.plain)}</div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-approve btn-sm" onclick="event.stopPropagation();app.sendApproval('${s.sessionId}')">✓ Approve</button>
+                <button class="btn btn-deny btn-sm" onclick="event.stopPropagation();app.sendDenial('${s.sessionId}')">✗ Deny</button>
+              </div>
+            </div>`;
+          }).join('') : ''}
         <div class="overview-card-footer">
           <span>${isList ? `<span class="status-badge ${s.status}" style="font-size:10px;">${this.formatStatus(s.status)}</span>` : (s.entrypoint === 'claude-desktop' ? 'Desktop' : 'CLI')}</span>
           <span>${this.timeAgo(s.lastModified || s.startedAt)}</span>
