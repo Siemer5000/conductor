@@ -820,6 +820,16 @@ app.get('/api/sessions/:sessionId/status', (req, res) => {
   }
 });
 
+// GET /api/version — last git commit date
+app.get('/api/version', (req, res) => {
+  try {
+    const date = execSync(`git -C ${__dirname} log -1 --format=%cd --date=format:"%b %d, %Y" 2>/dev/null`).toString().trim();
+    res.json({ lastModified: date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) });
+  } catch {
+    res.json({ lastModified: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) });
+  }
+});
+
 // GET /api/sessions/:sessionId/pending-approvals
 app.get('/api/sessions/:sessionId/pending-approvals', (req, res) => {
   try {

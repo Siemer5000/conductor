@@ -165,6 +165,13 @@ html, body {
 .connection-status { width: 7px; height: 7px; border-radius: 50%; background: var(--red); transition: background 0.3s; }
 .connection-status.connected { background: var(--green); }
 
+.draft-watermark {
+  position: fixed; top: 6px; right: 10px; z-index: 9999;
+  font-size: 9px; font-family: var(--font-mono); letter-spacing: 0.06em;
+  color: var(--text-muted); opacity: 0.45; pointer-events: none;
+  white-space: nowrap;
+}
+
 /* ─── Sidebar ───────────────────────────────────────────────────────────── */
 .sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
 
@@ -443,6 +450,7 @@ html, body {
         <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <div class="connection-status" id="connectionStatus" title="Disconnected"></div>
+      <div class="draft-watermark" id="draftWatermark">DRAFT</div>
       <button class="btn" onclick="app.refresh()">Refresh</button>
       <button class="btn" id="restartBtn" onclick="app.restartServer()" title="Restart the dashboard server (LaunchAgent will auto-relaunch it)">Restart Server</button>
     </div>
@@ -505,6 +513,7 @@ class Dashboard {
     this.showOverview();
     this.startPolling();
     this.loadTotalCost();
+    this._loadDraftWatermark();
   }
 
   // ─── WebSocket ──────────────────────────────────────────────────────────
@@ -585,6 +594,13 @@ class Dashboard {
     } catch (err) {
       document.getElementById('mainPanel').innerHTML = `<div class="empty-state"><h2>Error</h2><p>${err.message}</p></div>`;
     }
+  }
+
+  async _loadDraftWatermark() {
+    try {
+      const { lastModified } = await this.fetchJSON('/api/version');
+      document.getElementById('draftWatermark').textContent = `DRAFT · ${lastModified}`;
+    } catch {}
   }
 
   async loadTotalCost() {
