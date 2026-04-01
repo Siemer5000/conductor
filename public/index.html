@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conductor</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #1c2128;
+  --border: #30363d;
+  --border-light: #3d444d;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #656d76;
+  --green: #3fb950;
+  --green-bg: rgba(63, 185, 80, 0.1);
+  --yellow: #d29922;
+  --yellow-bg: rgba(210, 153, 34, 0.1);
+  --red: #f85149;
+  --red-bg: rgba(248, 81, 73, 0.1);
+  --blue: #58a6ff;
+  --blue-bg: rgba(88, 166, 255, 0.1);
+  --purple: #bc8cff;
+  --purple-bg: rgba(188, 140, 255, 0.1);
+  --orange: #f0883e;
+  --orange-bg: rgba(240, 136, 62, 0.1);
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+  --radius: 10px;
+  --radius-sm: 7px;
+  --shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+[data-theme="light"] {
+  --bg-primary: #f5f5f7;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f0f2;
+  --border: rgba(0,0,0,0.09);
+  --border-light: rgba(0,0,0,0.05);
+  --text-primary: #1d1d1f;
+  --text-secondary: #515154;
+  --text-muted: #86868b;
+  --green: #1a7f37;
+  --green-bg: rgba(26, 127, 55, 0.08);
+  --yellow: #9a6700;
+  --yellow-bg: rgba(154, 103, 0, 0.08);
+  --red: #cf222e;
+  --red-bg: rgba(207, 34, 46, 0.08);
+  --blue: #0066cc;
+  --blue-bg: rgba(0, 102, 204, 0.08);
+  --purple: #6e40c9;
+  --purple-bg: rgba(110, 64, 201, 0.08);
+  --orange: #bc4c00;
+  --orange-bg: rgba(188, 76, 0, 0.08);
+  --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 6px 20px rgba(0,0,0,0.07);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c7c7cc; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #aeaeb2; }
+[data-theme="light"] ::-webkit-scrollbar-track { background: transparent; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: 300px 1fr;
+  height: 100vh;
+}
+
+/* ─── Header ────────────────────────────────────────────────────────────── */
+.header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: stretch;
+  padding: 0 20px;
+  min-height: 60px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  z-index: 10;
+}
+
+.header-left { width: 280px; flex-shrink: 0; display: flex; align-items: center; }
+.header-right { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+.brand { display: flex; align-items: center; gap: 9px; cursor: pointer; padding: 4px 0; }
+.brand-icon { width: 26px; height: 26px; background: linear-gradient(135deg, #4f8ef7 0%, #9b6bff 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.brand-icon svg { width: 14px; height: 14px; color: #fff; }
+.brand-name { font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.04em; }
+.brand-name span { color: var(--text-muted); font-weight: 400; }
+.header-divider { width: 1px; height: 20px; background: var(--border); }
+.header-subtitle { font-size: 11px; color: var(--text-muted); margin-left: 4px; }
+
+.header-nav { display: flex; align-items: stretch; height: 100%; gap: 2px; }
+.header-nav-btn {
+  padding: 0 18px; height: 100%; display: flex; align-items: center;
+  font-size: 13px; font-weight: 500; color: var(--text-secondary);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; transition: all 0.15s; font-family: var(--font-sans);
+  letter-spacing: -0.01em; white-space: nowrap;
+  margin-bottom: -1px; /* align bottom border with header border */
+}
+.header-nav-btn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+.header-nav-btn.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+
+.stats { display: flex; gap: 12px; align-items: center; }
+.stat { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
+.stat-dot { width: 7px; height: 7px; border-radius: 50%; }
+.stat-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.stat-dot.waiting { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+.stat-dot.completed { background: var(--blue); }
+.stat-dot.processing { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+.stat-count { font-weight: 600; color: var(--text-primary); }
+
+.cost-ticker { font-size: 12px; color: var(--green); font-family: var(--font-mono); font-weight: 600; padding: 3px 10px; background: var(--green-bg); border-radius: 12px; }
+
+.header-actions { display: flex; gap: 8px; align-items: center; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-tertiary); color: var(--text-secondary); font-size: 12px;
+  cursor: pointer; transition: all 0.15s ease; font-family: var(--font-sans);
+}
+.btn:hover { background: var(--border); color: var(--text-primary); }
+.btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btn-primary:hover { opacity: 0.9; }
+.btn-approve { background: var(--green); border-color: var(--green); color: #fff; font-weight: 600; }
+.btn-approve:hover { opacity: 0.85; }
+.btn-deny { background: transparent; border-color: var(--red); color: var(--red); }
+.btn-deny:hover { background: var(--red-bg); }
+.btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
+.btn-danger:hover { background: var(--red-bg); }
+.btn-warning { background: transparent; border-color: var(--yellow); color: var(--yellow); }
+.btn-warning:hover { background: var(--yellow-bg); }
+.btn-sm { padding: 3px 7px; font-size: 11px; }
+
+.connection-status { width: 7px; height: 7px; border-radius: 50%; background: var(--red); transition: background 0.3s; }
+.connection-status.connected { background: var(--green); }
+
+/* ─── Sidebar ───────────────────────────────────────────────────────────── */
+.sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+
+
+.search-box { padding: 7px 10px; margin: 6px 10px; width: calc(100% - 20px); background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px; font-family: var(--font-sans); outline: none; }
+.search-box:focus { border-color: var(--blue); }
+.search-box::placeholder { color: var(--text-muted); }
+
+.project-list { flex: 1; overflow-y: auto; padding: 2px 0; }
+.project-item { border-bottom: 1px solid var(--border); }
+.project-header { display: flex; align-items: center; padding: 8px 12px; cursor: pointer; transition: background 0.1s; gap: 6px; }
+.project-header:hover { background: var(--bg-tertiary); }
+.project-chevron { width: 14px; height: 14px; color: var(--text-muted); transition: transform 0.2s; flex-shrink: 0; }
+.project-item.expanded .project-chevron { transform: rotate(90deg); }
+.project-name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-badge { font-size: 10px; padding: 1px 5px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--border); }
+
+.session-list { display: none; padding: 0 0 2px 0; }
+.project-item.expanded .session-list { display: block; }
+
+.session-item { display: flex; align-items: center; padding: 6px 12px 6px 34px; cursor: pointer; transition: background 0.1s; gap: 6px; }
+.session-item:hover { background: var(--bg-tertiary); }
+.session-item.selected { background: var(--blue-bg); border-right: 2px solid var(--blue); }
+
+.session-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.session-status-dot.active { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.session-status-dot.idle { background: var(--text-muted); }
+.session-status-dot.waiting_for_approval { background: var(--yellow); box-shadow: 0 0 4px var(--yellow); animation: pulse 2s infinite; }
+.session-status-dot.processing { background: var(--purple); box-shadow: 0 0 4px var(--purple); animation: pulse 1.5s infinite; }
+.session-status-dot.completed { background: var(--blue); opacity: 0.6; }
+.session-status-dot.paused { background: var(--orange); box-shadow: 0 0 4px var(--orange); }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.session-info { flex: 1; min-width: 0; }
+.session-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-meta { font-size: 10px; color: var(--text-muted); }
+.session-entrypoint { font-size: 10px; padding: 1px 4px; border-radius: 3px; background: var(--bg-primary); color: var(--text-muted); flex-shrink: 0; }
+
+/* ─── Main Panel ────────────────────────────────────────────────────────── */
+.main { overflow-y: auto; padding: 20px; min-height: 0; }
+
+.overview { display: flex; flex-direction: column; gap: 16px; }
+.overview-title { font-size: 18px; font-weight: 600; }
+.overview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.overview-list { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+
+.overview-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: all 0.15s ease; }
+.overview-card:hover { border-color: var(--border-light); transform: translateY(-1px); box-shadow: var(--shadow); }
+.overview-list .overview-card { border: none; border-bottom: 1px solid var(--border); border-radius: 0; transform: none !important; display: grid; grid-template-columns: 18px 1fr auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; padding: 10px 14px; }
+.overview-list .overview-card:last-child { border-bottom: none; }
+.overview-list .overview-card:hover { background: var(--bg-tertiary); box-shadow: none; }
+.overview-list .overview-card-header { margin-bottom: 0; grid-column: 2; grid-row: 1; }
+.overview-list .overview-card-title { font-size: 14px; }
+.overview-list .overview-card-slug { display: none; }
+.overview-list .overview-card-summary { grid-column: 2; grid-row: 2; margin-top: 2px; -webkit-line-clamp: 1; font-size: 11px; }
+.overview-list .overview-card-footer { border-top: none; margin-top: 0; padding-top: 0; grid-column: 3; grid-row: 1 / 3; flex-direction: column; align-items: flex-end; gap: 2px; justify-content: center; }
+.overview-list .session-status-dot { grid-column: 1; grid-row: 1 / 3; align-self: center; }
+.overview-list .overview-card-header .session-status-dot { display: none; }
+.overview-list .list-dot { display: flex !important; }
+.overview-list .approval-inline { grid-column: 2 / 4; }
+
+.sort-btn { display: flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 11px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.sort-btn:hover { border-color: var(--border-light); color: var(--text-secondary); }
+.sort-btn.active { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+.view-toggle { display: flex; gap: 2px; background: var(--bg-tertiary); border-radius: var(--radius-sm); padding: 2px; }
+.view-toggle-btn { background: none; border: none; padding: 4px 7px; border-radius: 4px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; transition: all 0.1s; }
+.view-toggle-btn.active { background: var(--bg-secondary); color: var(--text-primary); }
+.view-toggle-btn:hover:not(.active) { color: var(--text-secondary); }
+
+.status-filters { display: flex; gap: 4px; }
+.status-filter-btn { padding: 4px 10px; border-radius: 12px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 11px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.status-filter-btn:hover { border-color: var(--border-light); color: var(--text-secondary); }
+.status-filter-btn.active { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+.status-filter-btn.active.f-waiting { background: var(--yellow-bg); border-color: var(--yellow); color: var(--yellow); }
+.status-filter-btn.active.f-done { background: var(--bg-tertiary); border-color: var(--border-light); color: var(--text-secondary); }
+
+.overview-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.overview-card-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; letter-spacing: -0.01em; }
+.overview-card-slug { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+.overview-card-summary { font-size: 12px; color: var(--text-secondary); margin-top: 6px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.overview-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); }
+
+.status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+.status-badge.active { background: var(--green-bg); color: var(--green); }
+.status-badge.idle { background: var(--bg-tertiary); color: var(--text-muted); }
+.status-badge.waiting_for_approval { background: var(--yellow-bg); color: var(--yellow); }
+.status-badge.processing { background: var(--purple-bg); color: var(--purple); }
+.status-badge.completed { background: var(--blue-bg); color: var(--blue); }
+.status-badge.paused { background: var(--orange-bg); color: var(--orange); }
+
+/* ─── Session Detail ────────────────────────────────────────────────────── */
+.session-detail { display: flex; flex-direction: column; gap: 14px; }
+.detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.detail-title-row { display: flex; align-items: center; gap: 10px; }
+.detail-title { font-size: 18px; font-weight: 600; }
+.detail-meta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+.detail-meta-item { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+.detail-meta-item svg { width: 13px; height: 13px; color: var(--text-muted); }
+.detail-meta-label { color: var(--text-muted); }
+
+/* ─── Agent Control Bar ─────────────────────────────────────────────────── */
+.control-bar { display: flex; gap: 6px; align-items: center; padding: 10px 14px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); flex-wrap: wrap; }
+.control-bar-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-right: 4px; }
+.control-bar .btn { font-size: 11px; padding: 4px 10px; }
+
+/* ─── Token Stats ───────────────────────────────────────────────────────── */
+.token-panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+.token-panel-title { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.token-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.token-stat { text-align: center; }
+.token-stat-value { font-size: 18px; font-weight: 700; font-family: var(--font-mono); }
+.token-stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.token-bar { height: 6px; background: var(--bg-tertiary); border-radius: 3px; margin-top: 10px; overflow: hidden; display: flex; }
+.token-bar-segment { height: 100%; transition: width 0.3s; }
+
+/* ─── Git Panel ─────────────────────────────────────────────────────────── */
+.panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; transition: background 0.1s; }
+.panel-header:hover { background: var(--bg-tertiary); }
+.panel-header-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+.panel-body { padding: 12px 14px; border-top: 1px solid var(--border); }
+.panel-body.hidden { display: none; }
+
+.git-file-list { font-family: var(--font-mono); font-size: 11px; max-height: 150px; overflow-y: auto; }
+.git-file { padding: 2px 0; display: flex; gap: 8px; color: var(--text-secondary); }
+.git-file-status { width: 14px; text-align: center; font-weight: 600; }
+.git-file-status.M { color: var(--yellow); }
+.git-file-status.A { color: var(--green); }
+.git-file-status.D { color: var(--red); }
+.git-file-status.U { color: var(--purple); }
+
+.git-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+.git-input { flex: 1; min-width: 180px; padding: 5px 8px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px; font-family: var(--font-sans); outline: none; }
+.git-input:focus { border-color: var(--blue); }
+
+.git-log { font-family: var(--font-mono); font-size: 11px; max-height: 120px; overflow-y: auto; margin-top: 8px; }
+.git-commit { padding: 3px 0; display: flex; gap: 8px; color: var(--text-secondary); }
+.git-commit-hash { color: var(--blue); width: 60px; flex-shrink: 0; }
+.git-commit-msg { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.git-commit-time { color: var(--text-muted); flex-shrink: 0; }
+
+/* ─── Deploy Panel ──────────────────────────────────────────────────────── */
+.deploy-status { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.deploy-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+/* ─── Inject Prompt Modal ───────────────────────────────────────────────── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: none; align-items: center; justify-content: center; }
+.modal-overlay.visible { display: flex; }
+.modal { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; width: 500px; max-width: 90vw; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+.modal-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+.modal textarea { width: 100%; height: 120px; padding: 10px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-mono); font-size: 13px; resize: vertical; outline: none; }
+.modal textarea:focus { border-color: var(--blue); }
+.modal-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+
+/* ─── Approval Cards ────────────────────────────────────────────────────── */
+.approval-section { display: flex; flex-direction: column; gap: 8px; }
+.approval-section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--yellow); display: flex; align-items: center; gap: 6px; }
+.approval-card { background: var(--bg-secondary); border: 1px solid var(--yellow); border-radius: var(--radius); padding: 14px; animation: slideIn 0.3s ease; }
+@keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.approval-tool-name { font-size: 13px; font-weight: 600; font-family: var(--font-mono); color: var(--yellow); margin-bottom: 6px; }
+.approval-input { font-family: var(--font-mono); font-size: 11px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; color: var(--text-secondary); max-height: 100px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-bottom: 10px; }
+.approval-actions { display: flex; gap: 6px; }
+
+/* ─── Message Feed ──────────────────────────────────────────────────────── */
+.messages-section { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.messages-header { padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between; }
+.messages-feed { max-height: 400px; overflow-y: auto; padding: 4px 0; }
+.message { padding: 6px 14px; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+.message:hover { background: var(--bg-tertiary); }
+.message:last-child { border-bottom: none; }
+.message-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.message-role { font-size: 11px; font-weight: 600; padding: 1px 5px; border-radius: 3px; }
+.message-role.user { background: var(--blue-bg); color: var(--blue); }
+.message-role.assistant { background: var(--purple-bg); color: var(--purple); }
+.message-role.tool_result { background: var(--green-bg); color: var(--green); }
+.message-role.tool_result.error { background: var(--red-bg); color: var(--red); }
+.message-role.system { background: var(--bg-tertiary); color: var(--text-muted); }
+.message-time { font-size: 10px; color: var(--text-muted); }
+.message-text { font-size: 12px; color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow: hidden; }
+.message-text.expanded { max-height: none; }
+.message-expand { font-size: 11px; color: var(--blue); cursor: pointer; margin-top: 2px; }
+.tool-use-list { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.tool-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 3px; font-size: 11px; font-family: var(--font-mono); color: var(--orange); }
+.tool-tag-input { color: var(--text-muted); max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─── Analytics View ────────────────────────────────────────────────────── */
+.analytics { display: flex; flex-direction: column; gap: 16px; }
+.analytics-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.analytics-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
+.analytics-card-value { font-size: 28px; font-weight: 700; font-family: var(--font-mono); }
+.analytics-card-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+.analytics-bar-chart { display: flex; flex-direction: column; gap: 6px; }
+.analytics-bar-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.analytics-bar-label { width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); flex-shrink: 0; }
+.analytics-bar-track { flex: 1; height: 20px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden; }
+.analytics-bar-fill { height: 100%; background: var(--blue); border-radius: 3px; transition: width 0.5s; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; font-size: 10px; font-weight: 600; color: #fff; min-width: 40px; }
+.analytics-bar-cost { width: 80px; text-align: right; font-family: var(--font-mono); font-size: 12px; color: var(--green); flex-shrink: 0; }
+
+/* ─── Permissions Tab ──────────────────────────────────────── */
+.perm-section { margin-bottom: 28px; }
+.perm-section-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; }
+.perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.perm-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; transition: border-color 0.15s; }
+.perm-card.is-allow { border-color: var(--green); background: var(--green-bg); }
+.perm-card.is-deny { border-color: var(--red); background: var(--red-bg); }
+.perm-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.perm-card-name { font-size: 13px; font-weight: 600; font-family: var(--font-mono); color: var(--text-primary); }
+.perm-card-desc { font-size: 11px; color: var(--text-muted); }
+.perm-toggle { display: flex; gap: 2px; background: var(--bg-tertiary); border-radius: var(--radius-sm); padding: 2px; }
+.perm-toggle-btn { padding: 3px 8px; border-radius: 4px; border: none; background: none; font-size: 11px; font-weight: 500; cursor: pointer; font-family: var(--font-sans); color: var(--text-muted); transition: all 0.1s; white-space: nowrap; }
+.perm-toggle-btn.active-allow { background: var(--green); color: #fff; }
+.perm-toggle-btn.active-deny { background: var(--red); color: #fff; }
+.perm-toggle-btn.active-default { background: var(--bg-secondary); color: var(--text-primary); }
+.perm-custom-list { display: flex; flex-direction: column; gap: 6px; }
+.perm-custom-row { display: flex; align-items: center; gap: 8px; }
+.perm-custom-tag { flex: 1; padding: 5px 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-family: var(--font-mono); color: var(--text-primary); }
+.perm-custom-tag.deny-tag { border-color: var(--red); color: var(--red); background: var(--red-bg); }
+.perm-custom-input { flex: 1; padding: 5px 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-family: var(--font-mono); color: var(--text-primary); outline: none; }
+.perm-custom-input:focus { border-color: var(--border-light); }
+.perm-save-bar { position: sticky; bottom: 0; background: var(--bg-secondary); border-top: 1px solid var(--border); padding: 12px 0 4px; display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.perm-note { font-size: 11px; color: var(--text-muted); flex: 1; }
+
+/* ─── Utilities ─────────────────────────────────────────────────────────── */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); gap: 10px; text-align: center; padding: 40px; }
+.empty-state svg { width: 48px; height: 48px; opacity: 0.3; }
+.empty-state h2 { font-size: 16px; color: var(--text-secondary); }
+.empty-state p { font-size: 13px; max-width: 400px; }
+
+.loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--text-muted); }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast-container { position: fixed; bottom: 16px; right: 16px; z-index: 1000; display: flex; flex-direction: column; gap: 6px; }
+.toast { padding: 8px 14px; border-radius: var(--radius-sm); background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary); font-size: 12px; box-shadow: var(--shadow); animation: slideInRight 0.3s ease; display: flex; align-items: center; gap: 6px; }
+.toast.success { border-color: var(--green); }
+.toast.error { border-color: var(--red); }
+.toast.info { border-color: var(--blue); }
+@keyframes slideInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+.confirm-inline { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--yellow); }
+
+.theme-toggle { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+.theme-toggle:hover { background: var(--border); color: var(--text-primary); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="header">
+    <div class="header-left">
+      <div class="brand" onclick="app.switchTab('sessions');app.showOverview();" title="Conductor">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="4" y1="20" x2="16" y2="8"/>
+            <circle cx="18.5" cy="5.5" r="2.5" fill="currentColor" stroke="none"/>
+          </svg>
+        </div>
+        <div class="brand-name">Conductor</div>
+      </div>
+    </div>
+    <nav class="header-nav">
+      <button class="header-nav-btn active" id="navSessions" onclick="app.switchTab('sessions')">Sessions</button>
+      <button class="header-nav-btn" id="navAnalytics" onclick="app.switchTab('analytics')">Analytics</button>
+      <button class="header-nav-btn" id="navPermissions" onclick="app.switchTab('permissions')">Permissions</button>
+    </nav>
+    <div class="header-right">
+      <div class="stats" id="globalStats"></div>
+      <div class="cost-ticker" id="costTicker" title="Total tokens consumed across all sessions today (input + output + cache). Resets at midnight.">0 tokens today</div>
+      <button class="theme-toggle" id="themeToggle" onclick="app.toggleTheme()" title="Toggle light/dark mode">
+        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="connection-status" id="connectionStatus" title="Disconnected"></div>
+      <button class="btn" onclick="app.refresh()">Refresh</button>
+      <button class="btn" id="restartBtn" onclick="app.restartServer()" title="Restart the dashboard server (LaunchAgent will auto-relaunch it)">Restart Server</button>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <input type="text" class="search-box" placeholder="Search..." id="searchInput" oninput="app.filterSidebar(this.value)">
+    <div class="project-list" id="projectList">
+      <div class="loading"><div class="spinner"></div>Loading...</div>
+    </div>
+  </aside>
+
+  <main class="main" id="mainPanel">
+    <div class="loading"><div class="spinner"></div>Loading...</div>
+  </main>
+</div>
+
+<!-- Inject Prompt Modal -->
+<div class="modal-overlay" id="injectModal">
+  <div class="modal">
+    <div class="modal-title">Inject Prompt to Agent</div>
+    <textarea id="injectPromptText" placeholder="Type a message to send to the agent..."></textarea>
+    <div class="modal-actions">
+      <button class="btn" onclick="app.closeInjectModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="app.submitInjectPrompt()">Send to Agent</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+class Dashboard {
+  constructor() {
+    this.projects = [];
+    this.selectedSession = null;
+    this.selectedProject = null;
+    this.expandedProjects = new Set();
+    this.ws = null;
+    this.wsReconnectTimer = null;
+    this.pollTimer = null;
+    this.searchFilter = '';
+    this.currentTab = 'sessions';
+    this.injectSessionId = null;
+    this.statusFilter = 'all';
+    this.sortBy = 'default';
+    this.viewMode = localStorage.getItem('dashboardViewMode') || 'grid';
+    this.theme = localStorage.getItem('conductorTheme') || 'dark';
+    this._notifiedSessions = new Set();
+  }
+
+  async init() {
+    // Apply saved theme before first render
+    document.documentElement.setAttribute('data-theme', this.theme);
+    this._updateThemeIcon();
+    this._requestNotificationPermission();
+    this.connectWebSocket();
+    await this.loadProjects();
+    this.showOverview();
+    this.startPolling();
+    this.loadTotalCost();
+  }
+
+  // ─── WebSocket ──────────────────────────────────────────────────────────
+  connectWebSocket() {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    this.ws = new WebSocket(`${protocol}//${location.host}`);
+    this.ws.onopen = () => {
+      document.getElementById('connectionStatus').classList.add('connected');
+      document.getElementById('connectionStatus').title = 'Connected';
+    };
+    this.ws.onclose = () => {
+      document.getElementById('connectionStatus').classList.remove('connected');
+      document.getElementById('connectionStatus').title = 'Disconnected';
+      this.wsReconnectTimer = setTimeout(() => this.connectWebSocket(), 3000);
+    };
+    this.ws.onmessage = (e) => { try { this.handleWSMessage(JSON.parse(e.data)); } catch {} };
+  }
+
+  handleWSMessage(data) {
+    switch (data.type) {
+      case 'session:update':
+      case 'session:new':
+      case 'session:removed':
+        if (this.selectedSession === data.sessionId) this.loadSessionDetail(data.sessionId);
+        this.loadProjects();
+        if (data.type === 'session:new') this.showToast('New session detected', 'info');
+        break;
+      case 'approval:pending':
+        this.showToast(`Approval needed: ${data.approvals?.map(a => a.toolName).join(', ')}`, 'info');
+        if (this.selectedSession === data.sessionId) this.loadSessionDetail(data.sessionId);
+        this.loadProjects();
+        break;
+      case 'approval:resolved':
+        this.showToast(`Approval ${data.action}`, 'success');
+        if (this.selectedSession === data.sessionId) this.loadSessionDetail(data.sessionId);
+        break;
+      case 'session:injected': this.showToast('Prompt injected', 'success'); break;
+      case 'session:paused': this.showToast('Agent paused', 'info'); break;
+      case 'session:resumed': this.showToast('Agent resumed', 'success'); break;
+      case 'session:killed': this.showToast('Agent terminated', 'info'); this.loadProjects(); break;
+      case 'git:committed': this.showToast('Changes committed', 'success'); break;
+      case 'git:pushed': this.showToast('Pushed to remote', 'success'); break;
+      case 'deploy:started': this.showToast('Deploy started...', 'info'); break;
+      case 'deploy:completed': this.showToast(`Deployed: ${data.url || 'success'}`, 'success'); break;
+      case 'deploy:failed': this.showToast(`Deploy failed: ${data.error}`, 'error'); break;
+    }
+  }
+
+  // ─── API ────────────────────────────────────────────────────────────────
+  async fetchJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }
+
+  async postJSON(url, body = {}) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return r.json();
+  }
+
+  async loadProjects() {
+    try {
+      const { projects } = await this.fetchJSON('/api/projects');
+      this.projects = projects;
+      if (this.currentTab === 'sessions') this.renderSidebar();
+      this.updateGlobalStats();
+    } catch (err) { console.error(err); }
+  }
+
+  async loadProjectSessions(dirName) {
+    try { return (await this.fetchJSON(`/api/projects/${encodeURIComponent(dirName)}/sessions`)).sessions; }
+    catch { return []; }
+  }
+
+  async loadSessionDetail(sessionId) {
+    try {
+      const data = await this.fetchJSON(`/api/sessions/${sessionId}`);
+      this.renderSessionDetail(data);
+    } catch (err) {
+      document.getElementById('mainPanel').innerHTML = `<div class="empty-state"><h2>Error</h2><p>${err.message}</p></div>`;
+    }
+  }
+
+  async loadTotalCost() {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const data = await this.fetchJSON(`/api/analytics/filtered?start=${today}&end=${today}`);
+      const tokens = data.tokens || data.totalTokens || 0;
+      document.getElementById('costTicker').textContent = `${this.formatNum(tokens)} tokens today`;
+    } catch {}
+  }
+
+  // ─── Server Control ─────────────────────────────────────────────────────
+  async restartServer() {
+    const btn = document.getElementById('restartBtn');
+    btn.textContent = 'Restarting…';
+    btn.disabled = true;
+    try {
+      await this.postJSON('/api/server/restart');
+    } catch {}
+    // Poll until server is back up
+    const poll = setInterval(async () => {
+      try {
+        await fetch('/api/projects');
+        clearInterval(poll);
+        btn.textContent = 'Restart Server';
+        btn.disabled = false;
+        this.showToast('Server restarted', 'success');
+        this.refresh();
+      } catch {}
+    }, 800);
+  }
+
+  // ─── Agent Control ──────────────────────────────────────────────────────
+  async sendApproval(sessionId) {
+    const data = await this.postJSON(`/api/sessions/${sessionId}/approve`);
+    if (data.success) { this.showToast('Approved', 'success'); setTimeout(() => this.loadSessionDetail(sessionId), 1000); }
+    else this.showToast(data.error, 'error');
+  }
+
+  async sendDenial(sessionId) {
+    const data = await this.postJSON(`/api/sessions/${sessionId}/deny`);
+    if (data.success) { this.showToast('Denied', 'success'); setTimeout(() => this.loadSessionDetail(sessionId), 1000); }
+    else this.showToast(data.error, 'error');
+  }
+
+  async pauseAgent(sessionId) {
+    const data = await this.postJSON(`/api/sessions/${sessionId}/pause`);
+    data.success ? this.showToast('Agent paused', 'info') : this.showToast(data.error, 'error');
+  }
+
+  async resumeAgent(sessionId) {
+    const data = await this.postJSON(`/api/sessions/${sessionId}/resume`);
+    data.success ? this.showToast('Agent resumed', 'success') : this.showToast(data.error, 'error');
+  }
+
+  async killAgent(sessionId) {
+    if (!confirm('Terminate this agent? This will end the Claude Code session.')) return;
+    const data = await this.postJSON(`/api/sessions/${sessionId}/kill`);
+    data.success ? this.showToast('Agent terminated', 'info') : this.showToast(data.error, 'error');
+    setTimeout(() => { this.loadProjects(); this.loadSessionDetail(sessionId); }, 1000);
+  }
+
+  openInjectModal(sessionId) {
+    this.injectSessionId = sessionId;
+    document.getElementById('injectModal').classList.add('visible');
+    document.getElementById('injectPromptText').focus();
+  }
+
+  closeInjectModal() {
+    document.getElementById('injectModal').classList.remove('visible');
+    document.getElementById('injectPromptText').value = '';
+    this.injectSessionId = null;
+  }
+
+  async submitInjectPrompt() {
+    const prompt = document.getElementById('injectPromptText').value.trim();
+    if (!prompt || !this.injectSessionId) return;
+    const data = await this.postJSON(`/api/sessions/${this.injectSessionId}/inject`, { prompt });
+    this.closeInjectModal();
+    data.success ? this.showToast('Prompt sent', 'success') : this.showToast(data.error, 'error');
+  }
+
+  // ─── Git Operations ─────────────────────────────────────────────────────
+  async loadGitStatus(projectDirName) {
+    try { return await this.fetchJSON(`/api/projects/${encodeURIComponent(projectDirName)}/git/status`); }
+    catch { return { isGitRepo: false }; }
+  }
+
+  async loadGitLog(projectDirName) {
+    try { return await this.fetchJSON(`/api/projects/${encodeURIComponent(projectDirName)}/git/log`); }
+    catch { return { commits: [] }; }
+  }
+
+  async gitCommit(projectDirName) {
+    const input = document.getElementById('commitMessage');
+    const msg = input?.value?.trim();
+    if (!msg) { this.showToast('Enter a commit message', 'error'); return; }
+    const data = await this.postJSON(`/api/projects/${encodeURIComponent(projectDirName)}/git/commit`, { message: msg });
+    if (data.success) { input.value = ''; this.showToast('Committed', 'success'); this.refreshGitPanel(projectDirName); }
+    else this.showToast(data.error, 'error');
+  }
+
+  async gitPush(projectDirName) {
+    if (!confirm('Push to remote?')) return;
+    this.showToast('Pushing...', 'info');
+    const data = await this.postJSON(`/api/projects/${encodeURIComponent(projectDirName)}/git/push`);
+    data.success ? this.showToast('Pushed', 'success') : this.showToast(data.error, 'error');
+  }
+
+  async refreshGitPanel(projectDirName) {
+    const [git, log] = await Promise.all([this.loadGitStatus(projectDirName), this.loadGitLog(projectDirName)]);
+    const el = document.getElementById('gitPanelBody');
+    if (el) el.innerHTML = this.renderGitPanelContent(git, log, projectDirName);
+  }
+
+  // ─── Deploy ─────────────────────────────────────────────────────────────
+  async deploy(projectDirName) {
+    if (!confirm('Deploy to Netlify production?')) return;
+    this.showToast('Starting deploy...', 'info');
+    await this.postJSON(`/api/projects/${encodeURIComponent(projectDirName)}/deploy`);
+  }
+
+  // ─── Global Stats ───────────────────────────────────────────────────────
+  async updateGlobalStats() {
+    try {
+      const data = await this.fetchJSON('/api/overview');
+      document.getElementById('globalStats').innerHTML = `
+        <div class="stat"><span class="stat-dot active"></span><span class="stat-count">${data.activeSessions}</span> Active</div>
+        <div class="stat"><span class="stat-dot waiting"></span><span class="stat-count">${data.waitingSessions}</span> Waiting</div>
+        <div class="stat"><span class="stat-dot completed"></span><span class="stat-count">${data.completedSessions}</span> Done</div>`;
+      if (!this.selectedSession && this.currentTab === 'sessions') this.renderOverview(data);
+      this._checkWaitingNotifications(data.allSessions || []);
+    } catch {}
+  }
+
+  _requestNotificationPermission() {
+    if (!('Notification' in window) || Notification.permission !== 'default') return;
+    // Defer the prompt until the user has been on the page a moment
+    setTimeout(() => {
+      if (Notification.permission === 'default') Notification.requestPermission();
+    }, 5000);
+  }
+
+  _checkWaitingNotifications(sessions) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    sessions.forEach(s => {
+      if (s.status === 'waiting_for_approval' && !this._notifiedSessions.has(s.sessionId)) {
+        this._notifiedSessions.add(s.sessionId);
+        const n = new Notification('Conductor — Approval Needed', {
+          body: `${s.project || s.projectDir} is waiting for your input`,
+          tag: s.sessionId,
+          requireInteraction: true
+        });
+        n.onclick = () => { window.focus(); this.selectSession(s.sessionId, s.projectDir); n.close(); };
+      }
+      // Remove from notified set once no longer waiting (so it notifies again if it waits again)
+      if (s.status !== 'waiting_for_approval') this._notifiedSessions.delete(s.sessionId);
+    });
+  }
+
+  // ─── Tab Switching ──────────────────────────────────────────────────────
+  switchTab(tab) {
+    this.currentTab = tab;
+    document.getElementById('navSessions').classList.toggle('active', tab === 'sessions');
+    document.getElementById('navAnalytics').classList.toggle('active', tab === 'analytics');
+    document.getElementById('navPermissions').classList.toggle('active', tab === 'permissions');
+    this.selectedSession = null;
+    this.selectedProject = null;
+    if (tab === 'sessions') { this.renderSidebar(); this.showOverview(); }
+    else if (tab === 'analytics') { this.showAnalytics(); }
+    else if (tab === 'permissions') { this.showPermissions(); }
+  }
+
+  async showAnalytics() {
+    const panel = document.getElementById('mainPanel');
+    panel.innerHTML = '<div class="loading"><div class="spinner"></div>Loading analytics...</div>';
+
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+      const [allTime, week, insights] = await Promise.all([
+        this.fetchJSON('/api/analytics'),
+        this.fetchJSON(`/api/analytics/filtered?start=${weekAgo}&end=${today}`),
+        this.fetchJSON('/api/analytics/insights')
+      ]);
+
+      const weekSessions = insights.sessionsByDay.filter(d => d.date >= weekAgo).reduce((s, d) => s + d.count, 0);
+      const weekMessages = week.projects?.reduce((s, p) => s + (p.messageCount || 0), 0) || 0;
+      const cacheHit = insights.cacheStats.cacheHitRate || 0;
+
+      // Activity bars (sessions per day, last 14)
+      const maxDay = Math.max(...insights.sessionsByDay.map(d => d.count), 1);
+      const activityBars = insights.sessionsByDay.map(d => `
+        <div class="analytics-bar-row">
+          <div class="analytics-bar-label" style="width:90px;">${d.date.slice(5)}</div>
+          <div class="analytics-bar-track">
+            <div class="analytics-bar-fill" style="width:${(d.count/maxDay*100).toFixed(1)}%;background:var(--blue);">${d.count > 0 ? d.count : ''}</div>
+          </div>
+        </div>`).join('');
+
+      // Tokens by project bars
+      const maxTok = Math.max(...allTime.projects.map(p => p.totalTokens), 1);
+      const projectBars = allTime.projects.filter(p => p.totalTokens > 0).map(p => `
+        <div class="analytics-bar-row">
+          <div class="analytics-bar-label">${this.escapeHtml(p.name)}</div>
+          <div class="analytics-bar-track">
+            <div class="analytics-bar-fill" style="width:${(p.totalTokens/maxTok*100).toFixed(1)}%">${p.sessionCount > 0 ? p.sessionCount + ' sess' : ''}</div>
+          </div>
+          <div class="analytics-bar-cost" style="color:var(--text-secondary);">${this.formatNum(p.totalTokens)}</div>
+        </div>`).join('');
+
+      // Cache breakdown bar
+      const cs = insights.cacheStats;
+      const pct = (n) => cs.total > 0 ? (n / cs.total * 100).toFixed(1) : '0';
+
+      // Tool usage bars
+      const maxTool = Math.max(...(insights.toolUsage.map(t => t.count)), 1);
+      const toolBars = insights.toolUsage.map(t => `
+        <div class="analytics-bar-row">
+          <div class="analytics-bar-label" style="font-family:var(--font-mono);font-size:11px;">${this.escapeHtml(t.tool)}</div>
+          <div class="analytics-bar-track">
+            <div class="analytics-bar-fill" style="width:${(t.count/maxTool*100).toFixed(1)}%;background:var(--purple);">${t.count}</div>
+          </div>
+        </div>`).join('');
+
+      // Model distribution
+      const maxModel = Math.max(...(insights.modelTokens.map(m => m.tokens)), 1);
+      const modelBars = insights.modelTokens.map(m => {
+        const label = m.model.replace('claude-','').replace(/-latest$/,'');
+        return `
+        <div class="analytics-bar-row">
+          <div class="analytics-bar-label" style="font-family:var(--font-mono);font-size:11px;">${this.escapeHtml(label)}</div>
+          <div class="analytics-bar-track">
+            <div class="analytics-bar-fill" style="width:${(m.tokens/maxModel*100).toFixed(1)}%;background:var(--green);">${this.formatNum(m.tokens)}</div>
+          </div>
+        </div>`;}).join('');
+
+      panel.innerHTML = `
+        <div class="analytics">
+          <div class="overview-title">Analytics</div>
+
+          <div class="analytics-summary">
+            <div class="analytics-card">
+              <div class="analytics-card-value" style="color:var(--blue);">${weekSessions}</div>
+              <div class="analytics-card-label">Sessions This Week</div>
+            </div>
+            <div class="analytics-card">
+              <div class="analytics-card-value" style="color:var(--purple);">${this.formatNum(allTime.totalTokens)}</div>
+              <div class="analytics-card-label">All-Time Tokens</div>
+            </div>
+            <div class="analytics-card">
+              <div class="analytics-card-value" style="color:${cacheHit >= 40 ? 'var(--green)' : 'var(--yellow)'};">${cacheHit}%</div>
+              <div class="analytics-card-label">Cache Hit Rate</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
+              <div class="panel-header-title">Session Activity — Last 14 Days</div>
+            </div>
+            <div class="panel-body">
+              <div class="analytics-bar-chart">${activityBars || '<div style="color:var(--text-muted);font-size:12px;">No data</div>'}</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
+              <div class="panel-header-title">Tokens by Project — All Time</div>
+            </div>
+            <div class="panel-body">
+              <div class="analytics-bar-chart">${projectBars || '<div style="color:var(--text-muted);font-size:12px;">No data</div>'}</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
+              <div class="panel-header-title">Cache Efficiency <span style="font-weight:400;color:var(--text-muted);font-size:10px;margin-left:6px;">— higher cache read % = more efficient</span></div>
+            </div>
+            <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
+              <div style="height:20px;border-radius:4px;overflow:hidden;display:flex;">
+                <div style="width:${pct(cs.cacheRead)}%;background:var(--green);transition:width 0.5s;" title="Cache read: ${this.formatNum(cs.cacheRead)} tokens"></div>
+                <div style="width:${pct(cs.input)}%;background:var(--blue);transition:width 0.5s;" title="Input: ${this.formatNum(cs.input)} tokens"></div>
+                <div style="width:${pct(cs.output)}%;background:var(--purple);transition:width 0.5s;" title="Output: ${this.formatNum(cs.output)} tokens"></div>
+                <div style="width:${pct(cs.cacheWrite)}%;background:var(--yellow);transition:width 0.5s;" title="Cache write: ${this.formatNum(cs.cacheWrite)} tokens"></div>
+              </div>
+              <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;">
+                <span style="color:var(--green);">■ Cache read ${pct(cs.cacheRead)}%</span>
+                <span style="color:var(--blue);">■ Input ${pct(cs.input)}%</span>
+                <span style="color:var(--purple);">■ Output ${pct(cs.output)}%</span>
+                <span style="color:var(--yellow);">■ Cache write ${pct(cs.cacheWrite)}%</span>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);">Total: ${this.formatNum(cs.total)} tokens scanned across recent sessions</div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="panel">
+              <div class="panel-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                <div class="panel-header-title">Tool Usage</div>
+              </div>
+              <div class="panel-body">
+                <div class="analytics-bar-chart">${toolBars || '<div style="color:var(--text-muted);font-size:12px;">No data</div>'}</div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                <div class="panel-header-title">Model Distribution</div>
+              </div>
+              <div class="panel-body">
+                <div class="analytics-bar-chart">${modelBars || '<div style="color:var(--text-muted);font-size:12px;">No data</div>'}</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    } catch (err) {
+      panel.innerHTML = `<div class="empty-state"><h2>Error</h2><p>${err.message}</p></div>`;
+    }
+  }
+
+  // ─── Permissions ────────────────────────────────────────────────────────
+  async showPermissions() {
+    const panel = document.getElementById('mainPanel');
+    panel.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+
+    const data = await this.fetchJSON('/api/permissions');
+    // Working copies (arrays of pattern strings)
+    this._permAllow = [...(data.allow || [])];
+    this._permDeny  = [...(data.deny  || [])];
+
+    const TOOLS = [
+      { name: 'Bash',        pattern: 'Bash(*)',        desc: 'Run shell commands' },
+      { name: 'Edit',        pattern: 'Edit(*)',        desc: 'Edit existing files' },
+      { name: 'Write',       pattern: 'Write(*)',       desc: 'Create or overwrite files' },
+      { name: 'Read',        pattern: 'Read(*)',        desc: 'Read file contents' },
+      { name: 'Glob',        pattern: 'Glob(*)',        desc: 'Find files by pattern' },
+      { name: 'Grep',        pattern: 'Grep(*)',        desc: 'Search file contents' },
+      { name: 'WebFetch',    pattern: 'WebFetch(*)',    desc: 'Fetch web URLs' },
+      { name: 'WebSearch',   pattern: 'WebSearch(*)',   desc: 'Search the web' },
+      { name: 'Task',        pattern: 'Task(*)',        desc: 'Spawn sub-agents' },
+      { name: 'TodoWrite',   pattern: 'TodoWrite(*)',   desc: 'Write task lists' },
+      { name: 'mcp__*',      pattern: 'mcp__*(*)',      desc: 'All MCP server tools' },
+      { name: 'NotebookEdit',pattern: 'NotebookEdit(*)',desc: 'Edit Jupyter notebooks' },
+    ];
+
+    const renderCards = () => TOOLS.map(t => {
+      const isAllow = this._permAllow.includes(t.pattern);
+      const isDeny  = this._permDeny.includes(t.pattern);
+      const state   = isAllow ? 'allow' : isDeny ? 'deny' : 'default';
+      return `<div class="perm-card ${isAllow ? 'is-allow' : isDeny ? 'is-deny' : ''}">
+        <div class="perm-card-header">
+          <span class="perm-card-name">${this.escapeHtml(t.name)}</span>
+          <div class="perm-toggle">
+            <button class="perm-toggle-btn ${state==='allow'?'active-allow':''}" onclick="app.setPermTool('${t.pattern}','allow')">Allow</button>
+            <button class="perm-toggle-btn ${state==='default'?'active-default':''}" onclick="app.setPermTool('${t.pattern}','default')">Ask</button>
+            <button class="perm-toggle-btn ${state==='deny'?'active-deny':''}" onclick="app.setPermTool('${t.pattern}','deny')">Deny</button>
+          </div>
+        </div>
+        <div class="perm-card-desc">${this.escapeHtml(t.desc)}</div>
+      </div>`;
+    }).join('');
+
+    const knownPatterns = new Set(TOOLS.map(t => t.pattern));
+    const customAllow = this._permAllow.filter(p => !knownPatterns.has(p));
+    const customDeny  = this._permDeny.filter(p => !knownPatterns.has(p));
+
+    const renderCustom = () => `
+      <div class="perm-custom-list" id="customAllowList">
+        ${customAllow.map((p,i) => `<div class="perm-custom-row">
+          <span class="perm-custom-tag">${this.escapeHtml(p)}</span>
+          <button class="btn btn-sm btn-danger" onclick="app.removeCustomPerm('allow',${i})">✕</button>
+        </div>`).join('')}
+        <div class="perm-custom-row">
+          <input class="perm-custom-input" id="newAllowInput" placeholder="e.g. Bash(git *)" onkeydown="if(event.key==='Enter')app.addCustomPerm('allow')">
+          <button class="btn btn-sm btn-approve" onclick="app.addCustomPerm('allow')">Add</button>
+        </div>
+      </div>
+      <div style="margin-top:12px;margin-bottom:8px;font-size:12px;font-weight:600;color:var(--red);">Custom Deny Rules</div>
+      <div class="perm-custom-list" id="customDenyList">
+        ${customDeny.map((p,i) => `<div class="perm-custom-row">
+          <span class="perm-custom-tag deny-tag">${this.escapeHtml(p)}</span>
+          <button class="btn btn-sm btn-danger" onclick="app.removeCustomPerm('deny',${i})">✕</button>
+        </div>`).join('')}
+        <div class="perm-custom-row">
+          <input class="perm-custom-input" id="newDenyInput" placeholder="e.g. Bash(rm -rf *)" onkeydown="if(event.key==='Enter')app.addCustomPerm('deny')">
+          <button class="btn btn-sm btn-danger" onclick="app.addCustomPerm('deny')">Add</button>
+        </div>
+      </div>`;
+
+    panel.innerHTML = `<div style="max-width:900px;">
+      <div style="margin-bottom:20px;">
+        <div style="font-size:20px;font-weight:700;margin-bottom:6px;">Tool Permissions</div>
+        <div style="font-size:13px;color:var(--text-muted);max-width:600px;">Controls what Claude can do without asking. Changes are saved to <code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;">~/.claude/settings.json</code> and take effect immediately in new sessions.</div>
+      </div>
+      <div class="perm-section">
+        <div class="perm-section-title">Common Tools</div>
+        <div class="perm-grid" id="permGrid">${renderCards()}</div>
+      </div>
+      <div class="perm-section">
+        <div class="perm-section-title">Custom Allow Rules</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Use <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px;">Tool(pattern)</code> format, e.g. <code style="background:var(--bg-tertiary);padding:1px 4px;border-radius:3px;">Bash(git *)</code> to allow only git commands.</div>
+        <div id="customRulesSection">${renderCustom()}</div>
+      </div>
+      <div class="perm-save-bar">
+        <span class="perm-note">Changes take effect in new Claude sessions. Running sessions are not affected.</span>
+        <button class="btn btn-primary" onclick="app.savePermissions()">Save Permissions</button>
+      </div>
+    </div>`;
+
+    this._renderPermGrid = renderCards;
+    this._renderCustomRules = renderCustom;
+  }
+
+  setPermTool(pattern, state) {
+    this._permAllow = this._permAllow.filter(p => p !== pattern);
+    this._permDeny  = this._permDeny.filter(p => p !== pattern);
+    if (state === 'allow') this._permAllow.push(pattern);
+    if (state === 'deny')  this._permDeny.push(pattern);
+    document.getElementById('permGrid').innerHTML = this._renderPermGrid();
+  }
+
+  addCustomPerm(type) {
+    const input = document.getElementById(type === 'allow' ? 'newAllowInput' : 'newDenyInput');
+    const val = input.value.trim();
+    if (!val) return;
+    if (type === 'allow' && !this._permAllow.includes(val)) this._permAllow.push(val);
+    if (type === 'deny'  && !this._permDeny.includes(val))  this._permDeny.push(val);
+    document.getElementById('customRulesSection').innerHTML = this._renderCustomRules();
+  }
+
+  removeCustomPerm(type, idx) {
+    const knownPatterns = new Set([
+      'Bash(*)','Edit(*)','Write(*)','Read(*)','Glob(*)','Grep(*)','WebFetch(*)','WebSearch(*)','Task(*)','TodoWrite(*)','mcp__*(*)','NotebookEdit(*)'
+    ]);
+    if (type === 'allow') {
+      const custom = this._permAllow.filter(p => !knownPatterns.has(p));
+      const toRemove = custom[idx];
+      this._permAllow = this._permAllow.filter(p => p !== toRemove);
+    } else {
+      const custom = this._permDeny.filter(p => !knownPatterns.has(p));
+      const toRemove = custom[idx];
+      this._permDeny = this._permDeny.filter(p => p !== toRemove);
+    }
+    document.getElementById('customRulesSection').innerHTML = this._renderCustomRules();
+  }
+
+  async savePermissions() {
+    const data = await this.postJSON('/api/permissions', { allow: this._permAllow, deny: this._permDeny });
+    data.success ? this.showToast('Permissions saved', 'success') : this.showToast(data.error, 'error');
+  }
+
+  // ─── Rendering ──────────────────────────────────────────────────────────
+  renderSidebar() {
+    const container = document.getElementById('projectList');
+    const filter = this.searchFilter.toLowerCase();
+
+    if (!this.projects.length) {
+      container.innerHTML = '<div class="empty-state" style="padding:20px;"><p style="font-size:12px;">No projects found</p></div>';
+      return;
+    }
+
+    let html = '';
+    for (const p of this.projects) {
+      if (filter && !p.name.toLowerCase().includes(filter)) continue;
+      const expanded = this.expandedProjects.has(p.dirName);
+      html += `<div class="project-item ${expanded ? 'expanded' : ''}" data-project="${p.dirName}">
+        <div class="project-header" onclick="app.toggleProject('${p.dirName}')">
+          <svg class="project-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="project-name" title="${p.fullPath}">${this.escapeHtml(p.name)}</span>
+          <span class="project-badge">${p.sessionCount}</span>
+        </div>
+        <div class="session-list" id="sessions-${p.dirName}">${expanded ? '<div class="loading" style="padding:6px 34px;"><div class="spinner"></div></div>' : ''}</div>
+      </div>`;
+    }
+    container.innerHTML = html;
+    for (const d of this.expandedProjects) this.loadAndRenderSessions(d);
+  }
+
+  async loadAndRenderSessions(dirName) {
+    const sessions = await this.loadProjectSessions(dirName);
+    const container = document.getElementById(`sessions-${dirName}`);
+    if (!container) return;
+    const filter = this.searchFilter.toLowerCase();
+
+    let html = '';
+    for (const s of sessions) {
+      const name = s.slug || s.sessionId.substring(0, 8);
+      if (filter && !name.toLowerCase().includes(filter)) continue;
+      const sel = this.selectedSession === s.sessionId;
+      html += `<div class="session-item ${sel ? 'selected' : ''}" onclick="app.selectSession('${s.sessionId}','${dirName}')" title="${s.statusDetail}">
+        <span class="session-status-dot ${s.status}"></span>
+        <div class="session-info">
+          <div class="session-name">${this.escapeHtml(name)}${(s.pendingApprovals?.length || 0) > 0 ? ` <span style="color:var(--yellow)">(${s.pendingApprovals.length})</span>` : ''}</div>
+          <div class="session-meta">${this.timeAgo(s.lastModified)}</div>
+        </div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--green);font-weight:600;flex-shrink:0;" title="Total tokens">${this.formatNum(s.totalTokens || 0)} tok</span>
+      </div>`;
+    }
+    container.innerHTML = html || '<div style="padding:6px 34px;font-size:11px;color:var(--text-muted);">No sessions</div>';
+  }
+
+  toggleProject(d) { this.expandedProjects.has(d) ? this.expandedProjects.delete(d) : this.expandedProjects.add(d); this.renderSidebar(); }
+
+  async selectSession(sessionId, projectDir) {
+    this.selectedSession = sessionId;
+    this.selectedProject = projectDir;
+    this.currentTab = 'sessions';
+    this.renderSidebar();
+    document.getElementById('mainPanel').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    await this.loadSessionDetail(sessionId);
+  }
+
+  async renderSessionDetail(data) {
+    const panel = document.getElementById('mainPanel');
+    const isRunning = data.status !== 'completed';
+    const projectDir = this.selectedProject;
+
+    // Build control bar
+    const controlBar = isRunning ? `
+      <div class="control-bar">
+        <span class="control-bar-label">Agent Control</span>
+        <button class="btn btn-primary" onclick="app.openInjectModal('${data.sessionId}')">Inject Prompt</button>
+        <button class="btn btn-warning" onclick="app.pauseAgent('${data.sessionId}')">Pause</button>
+        <button class="btn btn-approve" onclick="app.resumeAgent('${data.sessionId}')">Resume</button>
+        <button class="btn btn-danger" onclick="app.killAgent('${data.sessionId}')">Kill</button>
+      </div>` : '';
+
+    // Build approvals
+    let approvalsHtml = '';
+    if (data.pendingApprovals?.length) {
+      approvalsHtml = `<div class="approval-section">
+        <div class="approval-section-title">Pending Approvals (${data.pendingApprovals.length})</div>
+        ${data.pendingApprovals.map(a => `<div class="approval-card">
+          <div class="approval-tool-name">${this.escapeHtml(a.toolName)}</div>
+          <div class="approval-input">${this.escapeHtml(this.formatApprovalInput(a.toolName, a.input))}</div>
+          <div class="approval-actions">
+            <button class="btn btn-approve" onclick="app.sendApproval('${data.sessionId}')">Approve</button>
+            <button class="btn btn-deny" onclick="app.sendDenial('${data.sessionId}')">Deny</button>
+          </div>
+        </div>`).join('')}
+      </div>`;
+    }
+
+    // Build token stats
+    const ts = data.tokenStats;
+    const tokenHtml = ts ? `
+      <div class="token-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div class="token-panel-title" style="margin-bottom:0;">Session Token Value <span style="font-size:10px;font-weight:400;color:var(--text-muted);">at API list prices</span></div>
+          <div style="font-family:var(--font-mono);font-size:28px;font-weight:800;color:var(--green);">~$${ts.estimated_cost.toFixed(2)}</div>
+        </div>
+        <div class="token-grid">
+          <div class="token-stat"><div class="token-stat-value" style="color:var(--blue)">${this.formatNum(ts.input_tokens)}</div><div class="token-stat-label">Input</div></div>
+          <div class="token-stat"><div class="token-stat-value" style="color:var(--purple)">${this.formatNum(ts.output_tokens)}</div><div class="token-stat-label">Output</div></div>
+          <div class="token-stat"><div class="token-stat-value" style="color:var(--orange)">${this.formatNum(ts.cache_write_tokens)}</div><div class="token-stat-label">Cache Write</div></div>
+          <div class="token-stat"><div class="token-stat-value" style="color:var(--green)">${this.formatNum(ts.cache_read_tokens)}</div><div class="token-stat-label">Cache Read</div></div>
+        </div>
+        <div class="token-bar">
+          ${this.renderTokenBar(ts)}
+        </div>
+      </div>` : '';
+
+    // Build messages
+    const msgsHtml = data.messages ? data.messages.map(m => this.renderMessage(m)).join('') : '';
+
+    panel.innerHTML = `
+      <div class="session-detail">
+        <div class="detail-header">
+          <div>
+            <div class="detail-title-row">
+              <button class="btn btn-sm" onclick="app.showOverview()">&#8592;</button>
+              <h1 class="detail-title">${this.escapeHtml(data.slug || data.sessionId.substring(0, 12))}</h1>
+              <span class="status-badge ${data.status}">${this.formatStatus(data.status)}</span>
+            </div>
+            <div class="detail-meta">
+              <div class="detail-meta-item">${this.escapeHtml(data.cwd || '')}</div>
+              ${data.startedAt ? `<div class="detail-meta-item">Started ${this.timeAgo(data.startedAt)}</div>` : ''}
+              <div class="detail-meta-item">${data.entrypoint === 'claude-desktop' ? 'Desktop' : 'CLI'}</div>
+              ${data.version ? `<div class="detail-meta-item">v${data.version}</div>` : ''}
+              ${data.gitBranch ? `<div class="detail-meta-item">Branch: ${this.escapeHtml(data.gitBranch)}</div>` : ''}
+              ${data.pid ? `<div class="detail-meta-item">PID: ${data.pid}</div>` : ''}
+            </div>
+          </div>
+        </div>
+        ${controlBar}
+        ${approvalsHtml}
+        ${tokenHtml}
+        <div id="gitDeployContainer"></div>
+        <div class="messages-section">
+          <div class="messages-header">
+            <span>Messages (${data.messages?.length || 0})</span>
+            <button class="btn btn-sm" onclick="app.loadSessionDetail('${data.sessionId}')">Refresh</button>
+          </div>
+          <div class="messages-feed" id="messagesFeed">${msgsHtml || '<div style="padding:20px;text-align:center;color:var(--text-muted);">No messages</div>'}</div>
+        </div>
+      </div>`;
+
+    const feed = document.getElementById('messagesFeed');
+    if (feed) feed.scrollTop = feed.scrollHeight;
+
+    // Load git + deploy panels async
+    if (projectDir) this.loadGitDeployPanels(projectDir);
+  }
+
+  async loadGitDeployPanels(projectDir) {
+    const container = document.getElementById('gitDeployContainer');
+    if (!container) return;
+
+    const [git, log] = await Promise.all([this.loadGitStatus(projectDir), this.loadGitLog(projectDir)]);
+
+    let html = '';
+    if (git.isGitRepo) {
+      html += `<div class="panel">
+        <div class="panel-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
+          <div class="panel-header-title">Git ${git.branch ? `(${this.escapeHtml(git.branch)})` : ''} ${git.changedCount ? `- ${git.changedCount} changed` : '- clean'}</div>
+          <span style="font-size:11px;color:var(--text-muted);">${git.commitsAhead ? `${git.commitsAhead} ahead` : ''}</span>
+        </div>
+        <div class="panel-body" id="gitPanelBody">${this.renderGitPanelContent(git, log, projectDir)}</div>
+      </div>`;
+    }
+
+    html += `<div class="panel" style="margin-top:10px;">
+      <div class="panel-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
+        <div class="panel-header-title">Deploy (Netlify)</div>
+      </div>
+      <div class="panel-body hidden">
+        <div class="deploy-actions">
+          <button class="btn btn-primary" onclick="app.deploy('${projectDir}')">Deploy to Production</button>
+        </div>
+      </div>
+    </div>`;
+
+    container.innerHTML = html;
+  }
+
+  renderGitPanelContent(git, log, projectDir) {
+    let html = '';
+    if (git.changedCount > 0) {
+      html += `<div class="git-file-list">${git.files.map(f =>
+        `<div class="git-file"><span class="git-file-status ${f.status}">${f.status}</span><span>${this.escapeHtml(f.file)}</span></div>`
+      ).join('')}</div>
+      <div class="git-actions">
+        <input class="git-input" id="commitMessage" placeholder="Commit message..." onkeydown="if(event.key==='Enter')app.gitCommit('${projectDir}')">
+        <button class="btn btn-primary" onclick="app.gitCommit('${projectDir}')">Commit</button>
+        <button class="btn" onclick="app.gitPush('${projectDir}')">Push</button>
+      </div>`;
+    } else {
+      html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Working tree clean</div>';
+      html += `<button class="btn" onclick="app.gitPush('${projectDir}')">Push</button>`;
+    }
+
+    if (log.commits?.length) {
+      html += `<div class="git-log">${log.commits.map(c =>
+        `<div class="git-commit"><span class="git-commit-hash">${c.hash?.substring(0,7) || ''}</span><span class="git-commit-msg">${this.escapeHtml(c.message || '')}</span><span class="git-commit-time">${this.escapeHtml(c.time || '')}</span></div>`
+      ).join('')}</div>`;
+    }
+    return html;
+  }
+
+  renderMessage(msg) {
+    let roleClass = msg.type, roleLabel = msg.type === 'assistant' ? 'Claude' : msg.type === 'user' ? 'You' : msg.type === 'system' ? 'System' : msg.type;
+    if (msg.type === 'tool_result') { roleClass = msg.isError ? 'tool_result error' : 'tool_result'; roleLabel = msg.isError ? 'Error' : 'Result'; }
+
+    let content = '';
+    if (msg.text) {
+      const trunc = msg.text.length > 400;
+      content = `<div class="message-text" ${trunc ? 'style="cursor:pointer" onclick="this.classList.toggle(\'expanded\')"' : ''}>${this.escapeHtml(msg.text.substring(0, 400))}${trunc ? '...' : ''}</div>`;
+      if (trunc) content += `<div class="message-expand" onclick="this.previousElementSibling.classList.toggle('expanded');this.textContent=this.textContent==='Show more'?'Show less':'Show more'">Show more</div>`;
+    }
+    if (msg.tools?.length) {
+      content += `<div class="tool-use-list">${msg.tools.map(t =>
+        `<div class="tool-tag"><span>${this.escapeHtml(t.name)}</span>${t.input ? `<span class="tool-tag-input">${this.escapeHtml(t.input)}</span>` : ''}</div>`
+      ).join('')}</div>`;
+    }
+
+    return `<div class="message"><div class="message-header"><span class="message-role ${roleClass}">${roleLabel}</span><span class="message-time">${this.formatTime(msg.timestamp)}</span>${msg.model ? `<span style="font-size:10px;color:var(--text-muted)">${msg.model}</span>` : ''}</div>${content}</div>`;
+  }
+
+  renderTokenBar(ts) {
+    const total = ts.input_tokens + ts.output_tokens + ts.cache_write_tokens + ts.cache_read_tokens;
+    if (!total) return '';
+    const pct = (v) => ((v / total) * 100).toFixed(1);
+    return `<div class="token-bar-segment" style="width:${pct(ts.input_tokens)}%;background:var(--blue);" title="Input"></div>
+      <div class="token-bar-segment" style="width:${pct(ts.output_tokens)}%;background:var(--purple);" title="Output"></div>
+      <div class="token-bar-segment" style="width:${pct(ts.cache_write_tokens)}%;background:var(--orange);" title="Cache Write"></div>
+      <div class="token-bar-segment" style="width:${pct(ts.cache_read_tokens)}%;background:var(--green);" title="Cache Read"></div>`;
+  }
+
+  async showOverview() {
+    this.selectedSession = null;
+    this.selectedProject = null;
+    this.renderSidebar();
+    try {
+      const data = await this.fetchJSON('/api/overview');
+      this.renderOverview(data);
+    } catch (err) {
+      document.getElementById('mainPanel').innerHTML = `<div class="empty-state"><h2>Error</h2><p>${err.message}</p></div>`;
+    }
+  }
+
+  renderOverview(data) {
+    if (this.selectedSession || this.currentTab !== 'sessions') return;
+    const panel = document.getElementById('mainPanel');
+
+    if (!data.allSessions.length) {
+      panel.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/></svg><h2>No Sessions Found</h2><p>Start a Claude Code session to see it here.</p></div>`;
+      return;
+    }
+
+    const isList = this.viewMode === 'list';
+
+    // Apply status filter
+    let filtered = data.allSessions.filter(s => {
+      if (this.statusFilter === 'active') return ['active','processing','idle','paused'].includes(s.status);
+      if (this.statusFilter === 'waiting') return s.status === 'waiting_for_approval';
+      if (this.statusFilter === 'done') return s.status === 'completed';
+      return true;
+    });
+
+    // Apply sort
+    if (this.sortBy === 'cost') {
+      filtered = [...filtered].sort((a, b) => (b.totalTokens || 0) - (a.totalTokens || 0));
+    }
+
+    const cards = filtered.map(s => `
+      <div class="overview-card" onclick="app.selectSession('${s.sessionId}','${s.projectDirName}')">
+        ${isList ? `<span class="session-status-dot ${s.status} list-dot" style="display:flex;align-self:center;grid-column:1;grid-row:1/3;"></span>` : ''}
+        <div class="overview-card-header">
+          <div class="overview-card-title">${isList ? '' : `<span class="session-status-dot ${s.status}"></span>`}${this.escapeHtml(s.projectName)}</div>
+          <span style="font-family:var(--font-mono);font-size:${isList ? '12' : '14'}px;font-weight:700;color:var(--green);" title="Total tokens in this session">${this.formatNum(s.totalTokens || 0)} tok</span>
+        </div>
+        ${isList ? '' : `<div style="display:flex;align-items:center;justify-content:space-between;"><div class="overview-card-slug">${this.escapeHtml(s.slug || s.sessionId.substring(0, 8))}</div><span class="status-badge ${s.status}">${this.formatStatus(s.status)}</span></div>`}
+        <div class="overview-card-summary">${this.escapeHtml(s.summary || '')}</div>
+        ${s.pendingApprovals.length ? `
+          <div class="${isList ? 'approval-inline' : ''}" style="margin-top:8px;padding:8px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:var(--radius-sm);" onclick="event.stopPropagation()">
+            <div style="font-size:11px;color:var(--yellow);margin-bottom:6px;font-weight:600;">⏳ Waiting: ${s.pendingApprovals.map(a => this.escapeHtml(a.toolName)).join(', ')}</div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-approve" style="font-size:11px;padding:3px 10px;" onclick="event.stopPropagation();app.sendApproval('${s.sessionId}')">Approve</button>
+              <button class="btn btn-deny" style="font-size:11px;padding:3px 10px;" onclick="event.stopPropagation();app.sendDenial('${s.sessionId}')">Deny</button>
+            </div>
+          </div>` : ''}
+        <div class="overview-card-footer">
+          <span>${isList ? `<span class="status-badge ${s.status}" style="font-size:10px;">${this.formatStatus(s.status)}</span>` : (s.entrypoint === 'claude-desktop' ? 'Desktop' : 'CLI')}</span>
+          <span>${this.timeAgo(s.lastModified || s.startedAt)}</span>
+        </div>
+      </div>`).join('');
+
+    const sf = this.statusFilter;
+    const allCount = data.allSessions.length;
+    const activeCount = data.allSessions.filter(s => ['active','processing','waiting_for_approval','idle'].includes(s.status)).length;
+    const waitingCount = data.allSessions.filter(s => s.status === 'waiting_for_approval').length;
+    const doneCount = data.allSessions.filter(s => s.status === 'completed').length;
+
+    panel.innerHTML = `
+      <div class="overview">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="overview-title">Sessions</div>
+            <div class="status-filters">
+              <button class="status-filter-btn ${sf==='all'?'active':''}" onclick="app.setStatusFilter('all')">All <span style="opacity:0.6;">${allCount}</span></button>
+              <button class="status-filter-btn ${sf==='active'?'active':''}" onclick="app.setStatusFilter('active')">Active <span style="opacity:0.6;">${activeCount}</span></button>
+              <button class="status-filter-btn f-waiting ${sf==='waiting'?'active':''}" onclick="app.setStatusFilter('waiting')">Waiting <span style="opacity:0.6;">${waitingCount}</span></button>
+              <button class="status-filter-btn f-done ${sf==='done'?'active':''}" onclick="app.setStatusFilter('done')">Done <span style="opacity:0.6;">${doneCount}</span></button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+          <button class="sort-btn ${this.sortBy==='cost'?'active':''}" onclick="app.setSortBy(app.sortBy==='cost'?'default':'cost')" title="Sort by token count">
+            ${this.sortBy==='cost' ? '↓ Most tokens' : 'Sort by tokens'}
+          </button>
+          <div class="view-toggle">
+            <button class="view-toggle-btn ${!isList ? 'active' : ''}" onclick="app.setViewMode('grid')" title="Grid view">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="0" width="6" height="6" rx="1"/><rect x="8" y="0" width="6" height="6" rx="1"/><rect x="0" y="8" width="6" height="6" rx="1"/><rect x="8" y="8" width="6" height="6" rx="1"/></svg>
+            </button>
+            <button class="view-toggle-btn ${isList ? 'active' : ''}" onclick="app.setViewMode('list')" title="List view">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="1" width="14" height="2" rx="1"/><rect x="0" y="6" width="14" height="2" rx="1"/><rect x="0" y="11" width="14" height="2" rx="1"/></svg>
+            </button>
+          </div>
+          </div>
+        </div>
+        <div class="${isList ? 'overview-list' : 'overview-grid'}">${cards}</div>
+      </div>`;
+  }
+
+  setViewMode(mode) {
+    this.viewMode = mode;
+    localStorage.setItem('dashboardViewMode', mode);
+    this.showOverview();
+  }
+
+  setSortBy(sort) {
+    this.sortBy = sort;
+    this.showOverview();
+  }
+
+  toggleTheme() {
+    this.theme = this.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', this.theme);
+    localStorage.setItem('conductorTheme', this.theme);
+    this._updateThemeIcon();
+  }
+
+  _updateThemeIcon() {
+    const icon = document.getElementById('themeIcon');
+    if (!icon) return;
+    if (this.theme === 'light') {
+      // Sun icon
+      icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+    } else {
+      // Moon icon
+      icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+  }
+
+  setStatusFilter(filter) {
+    this.statusFilter = filter;
+    this.showOverview();
+  }
+
+  // ─── Utilities ──────────────────────────────────────────────────────────
+  filterSidebar(v) { this.searchFilter = v; this.renderSidebar(); }
+  async refresh() { await this.loadProjects(); this.selectedSession ? await this.loadSessionDetail(this.selectedSession) : await this.showOverview(); this.loadTotalCost(); this.showToast('Refreshed', 'info'); }
+  startPolling() { this.pollTimer = setInterval(() => { this.updateGlobalStats(); if (this.selectedSession) this.loadSessionDetail(this.selectedSession); this.loadTotalCost(); }, 5000); }
+
+  formatStatus(s) { return { active: 'Active', idle: 'Idle', waiting_for_approval: 'Waiting', processing: 'Processing', completed: 'Done', paused: 'Paused' }[s] || s; }
+  formatApprovalInput(tool, input) {
+    if (!input) return '';
+    if (tool === 'Bash') return `Command: ${input.command || JSON.stringify(input)}`;
+    if (tool === 'Write') return `File: ${input.file_path}\n${(input.content || '').substring(0, 200)}...`;
+    if (tool === 'Edit') return `File: ${input.file_path}\nOld: ${(input.old_string || '').substring(0, 80)}\nNew: ${(input.new_string || '').substring(0, 80)}`;
+    return JSON.stringify(input, null, 2).substring(0, 400);
+  }
+  formatNum(n) { if (n >= 1000000) return (n/1000000).toFixed(1) + 'M'; if (n >= 1000) return (n/1000).toFixed(0) + 'K'; return String(n); }
+  timeAgo(t) { if (!t) return ''; const ms = typeof t === 'number' ? t : new Date(t).getTime(); const d = Date.now() - ms; const s = Math.floor(d/1000), m = Math.floor(s/60), h = Math.floor(m/60), dy = Math.floor(h/24); if (s < 30) return 'Just now'; if (s < 60) return s+'s ago'; if (m < 60) return m+'m ago'; if (h < 24) return h+'h ago'; if (dy < 7) return dy+'d ago'; return new Date(ms).toLocaleDateString(); }
+  formatTime(t) { if (!t) return ''; return new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+  escapeHtml(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  showToast(msg, type='info') { const c = document.getElementById('toastContainer'), t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg; c.appendChild(t); setTimeout(() => t.remove(), 4000); }
+}
+
+const app = new Dashboard();
+app.init();
+
+// Keyboard shortcut: Escape closes modal
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') app.closeInjectModal();
+});
+</script>
+</body>
+</html>
